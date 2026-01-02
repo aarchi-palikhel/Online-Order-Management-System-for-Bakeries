@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% load static %}
 
 {% block title %}Customize {{ product.name }} - Live Bakery{% endblock %}
 
@@ -57,6 +58,7 @@
                                     <svg class="w-4 h-4 mr-2 text-[#8f3232] shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
                                     </svg>
+                                    <span id="preview-quantity" class="truncate">Quantity : 1</span>
                                 </div>
                                 <div class="flex items-center text-gray-600">
                                     <svg class="w-4 h-4 mr-2 text-[#8f3232] shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -314,188 +316,7 @@
     </div>
 </div>
 
-<script>
-document.addEventListener('DOMContentLoaded', function() {
-    const basePrice = parseFloat('{{ product.base_price|escapejs }}');
-    const form = document.getElementById('customize-form');
-    const weightSelect = document.querySelector('select[name="weight"]');
-    const tiersSelect = document.querySelector('select[name="tiers"]');
-    const customWeightContainer = document.getElementById('custom-weight-container');
-    const quantityInput = document.querySelector('input[name="quantity"]');
-    const messageInput = document.querySelector('input[name="message_on_cake"]');
-    
-    // Price calculation logic
-    const weightMultipliers = {
-        '0.5': 0.7,
-        '1': 1.0,
-        '2': 1.8,
-        '3': 2.5,
-        '4': 3.2,
-        '5': 4.0,
-        'custom': 1.0
-    };
-    
-    const tierMultipliers = {
-        '1': 1.0,
-        '2': 1.5,
-        '3': 2.0
-    };
-    
-    const weightLabels = {
-        '0.5': '0.5 lb',
-        '1': '1 lb',
-        '2': '2 lb',
-        '3': '3 lb',
-        '4': '4 lb',
-        '5': '5 lb',
-        'custom': 'Custom'
-    };
-    
-    const tierLabels = {
-        '1': 'Single Tier',
-        '2': 'Two Tiers',
-        '3': 'Three Tiers'
-    };
-    
-    // Update preview and price
-    function updatePreview() {
-        const selectedWeight = weightSelect.value;
-        const selectedTiers = tiersSelect.value;
-        const message = messageInput.value;
-        const quantity = parseInt(quantityInput.value) || 1;
-        
-        // Get display values
-        const weightLabel = weightLabels[selectedWeight] || selectedWeight;
-        const tiersLabel = tierLabels[selectedTiers] || selectedTiers;
-        
-        // Update preview details
-        document.getElementById('preview-weight').textContent = weightLabel;
-        document.getElementById('preview-tiers').textContent = tiersLabel;
-        
-        // Update message preview
-        const messagePreview = document.getElementById('preview-message');
-        const messageText = document.getElementById('preview-message-text');
-        if (message.trim()) {
-            messageText.textContent = message;
-            messagePreview.classList.remove('hidden');
-        } else {
-            messagePreview.classList.add('hidden');
-        }
-        
-        // Calculate price
-        let weightMultiplier = weightMultipliers[selectedWeight] || 1.0;
-        let tierMultiplier = tierMultipliers[selectedTiers] || 1.0;
-        
-        // For custom weight, use entered value
-        if (selectedWeight === 'custom') {
-            const customWeightInput = document.querySelector('input[name="custom_weight"]');
-            if (customWeightInput && customWeightInput.value) {
-                const customWeight = parseFloat(customWeightInput.value);
-                if (!isNaN(customWeight)) {
-                    weightMultiplier = customWeight;
-                }
-            }
-        }
-        
-        const price = basePrice * weightMultiplier * tierMultiplier * quantity;
-        
-        // Update price display
-        document.getElementById('base-price').textContent = basePrice.toFixed(2);
-        document.getElementById('weight-multiplier').textContent = weightMultiplier.toFixed(1) + 'x';
-        document.getElementById('tier-multiplier').textContent = tierMultiplier.toFixed(1) + 'x';
-        document.getElementById('estimated-price').textContent = 'Rs. ' + price.toFixed(2);
-        document.getElementById('final-price').textContent = 'Rs. ' + price.toFixed(2);
-        document.getElementById('final-quantity').textContent = quantity;
-        document.getElementById('final-weight').textContent = weightLabel;
-        document.getElementById('final-tiers').textContent = tiersLabel.toLowerCase();
-    }
-    
-    // Show/hide custom weight input
-    function toggleCustomWeight() {
-        if (weightSelect.value === 'custom') {
-            customWeightContainer.classList.remove('hidden');
-            const customWeightInput = document.querySelector('input[name="custom_weight"]');
-            if (customWeightInput) {
-                customWeightInput.focus();
-            }
-        } else {
-            customWeightContainer.classList.add('hidden');
-        }
-        updatePreview();
-    }
-    
-
-    // Image preview
-    const imageInput = document.getElementById('reference-image-input');
-    const imagePreview = document.getElementById('image-preview');
-    const previewImage = document.getElementById('preview-image');
-    
-    if (imageInput) {
-        imageInput.addEventListener('change', function(event) {
-            const file = event.target.files[0];
-            if (file) {
-                const reader = new FileReader();
-                reader.onload = function(e) {
-                    previewImage.src = e.target.result;
-                    imagePreview.classList.remove('hidden');
-                };
-                reader.readAsDataURL(file);
-            } else {
-                imagePreview.classList.add('hidden');
-            }
-        });
-    }
-    
-    // Set minimum delivery date
-    const deliveryDateInput = document.querySelector('input[name="delivery_date"]');
-    if (deliveryDateInput) {
-        const today = new Date();
-        const minDate = new Date(today);
-        minDate.setDate(today.getDate() + 2);
-        
-        const formattedMinDate = minDate.toISOString().split('T')[0];
-        deliveryDateInput.min = formattedMinDate;
-        
-        // Set default to 3 days from today
-        const defaultDate = new Date(today);
-        defaultDate.setDate(today.getDate() + 3);
-        const formattedDefaultDate = defaultDate.toISOString().split('T')[0];
-        deliveryDateInput.value = formattedDefaultDate;
-    }
-    
-    // Event listeners
-    weightSelect.addEventListener('change', toggleCustomWeight);
-    tiersSelect.addEventListener('change', updatePreview);
-    quantityInput.addEventListener('input', updatePreview);
-    messageInput.addEventListener('input', updatePreview);
-    
-    const customWeightInput = document.querySelector('input[name="custom_weight"]');
-    if (customWeightInput) {
-        customWeightInput.addEventListener('input', updatePreview);
-    }
-    
-    // Form validation
-    if (form) {
-        form.addEventListener('submit', function(event) {
-            // Validate custom weight if selected
-            if (weightSelect.value === 'custom') {
-                const customWeightInput = document.querySelector('input[name="custom_weight"]');
-                if (!customWeightInput.value.trim()) {
-                    event.preventDefault();
-                    alert('Please enter custom weight');
-                    customWeightInput.focus();
-                    return false;
-                }
-            }
-        });
-    }
-    
-    // Initialize
-    toggleCustomWeight();
-    updatePreview();
-});
-</script>
-
+<script src="{% static 'js/customize_cake.js' %}"></script>
 <style>
 /* Custom select styling */
 select {

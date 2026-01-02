@@ -12,7 +12,10 @@
     <!-- CSRF Token for AJAX requests -->
     <meta name="csrf-token" content="{{ csrf_token }}">
    
-   {% tailwind_css %}
+    {% tailwind_css %}
+    
+    <!-- Optional: Add any additional head scripts here -->
+    {% block extra_head %}{% endblock %}
 </head>
 <body class="bg-white min-h-screen flex flex-col">
     <!-- Include Navbar -->
@@ -38,16 +41,12 @@
     <!-- Include Footer -->
     {% include 'partials/footer.html' %}
 
-    <!-- JavaScript for CSRF token and general functionality -->
-    <script>
-    // Get CSRF token for AJAX requests
-    function getCSRFToken() {
-        const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]');
-        return csrfToken ? csrfToken.value : '';
-    }
+    <!-- Global JavaScript -->
+    <script src="{% static 'js/global.js' %}"></script>
+    <script src="{% static 'js/cart.js' %}"></script>
     
-    // Set up AJAX CSRF token
-    const csrftoken = getCSRFToken();
-    </script>
+    <!-- Optional: Page-specific scripts -->
+    {% block extra_scripts %}{% endblock %}
+
 </body>
 </html>

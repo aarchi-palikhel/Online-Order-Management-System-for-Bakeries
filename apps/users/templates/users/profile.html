@@ -4,10 +4,10 @@
 
 {% block content %}
 <div class="max-w-4xl mx-auto my-8 p-6 bg-white rounded-lg shadow-md">
-    <!-- Add user type badge -->
+    <!-- user type badge -->
     <div class="flex items-center justify-between mb-6">
         <h2 class="text-2xl font-bold text-[#8f3232]">My Profile</h2>
-        <span class="px-3 py-1 bg-[#eec1ad] text-[#8f3232] rounded-full text-sm font-medium">
+        <span class="px-3 py-1 text-2xl font-bold text-[#8f3232] rounded-full">
             {% if user.is_staff %}Admin{% else %}Customer{% endif %}
         </span>
     </div>
@@ -29,13 +29,13 @@
             <div class="space-y-3">
                 {% if not user.is_staff %}
                 <!-- Customer Actions -->
-                <a href="{% url 'orders:order_list' %}" class="block bg-[#eec1ad] text-[#8f3232] p-3 rounded text-center hover:bg-[#dbac98] font-medium">
+                <a href="{% url 'orders:order_list' %}" class="block border bg-[#eec1ad] border-[#8f3232] text-[#8f3232] p-3 rounded text-center hover:bg-[#dbac98] font-medium">
                     📦 View My Orders
                 </a>
-                <a href="{% url 'cart:cart_detail' %}" class="block border border-[#8f3232] text-[#8f3232] p-3 rounded text-center hover:bg-[#8f3232] hover:text-white font-medium">
+                <a href="{% url 'cart:cart_detail' %}" class="block border bg-[#eec1ad] border-[#8f3232] text-[#8f3232] p-3 rounded text-center hover:bg-[#8f3232] hover:text-white font-medium">
                     🛒 View My Cart
                 </a>
-                <a href="{% url 'products:product_list' %}" class="block border border-[#8f3232] text-[#8f3232] p-3 rounded text-center hover:bg-[#8f3232] hover:text-white font-medium">
+                <a href="{% url 'products:product_list' %}" class="block border bg-[#eec1ad] border-[#8f3232] text-[#8f3232] p-3 rounded text-center hover:bg-[#8f3232] hover:text-white font-medium">
                     🍞 Continue Shopping
                 </a>
                 {% else %}

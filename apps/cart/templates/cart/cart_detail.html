@@ -3,8 +3,97 @@
 
 {% block title %}Shopping Cart - Live Bakery{% endblock %}
 
+{% block extra_head %}
+<style>
+.animate-slide-in-right {
+    animation: slideInRight 0.3s ease-out forwards;
+}
+
+@keyframes slideInRight {
+    from {
+        opacity: 0;
+        transform: translateX(100%);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
+.flex.items-center {
+    transition: all 0.3s ease;
+}
+
+.quantity-controls {
+    display: flex;
+    align-items: center;
+}
+
+.quantity-btn {
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid #d1d5db;
+    background: white;
+    cursor: pointer;
+    user-select: none;
+}
+
+.quantity-btn:hover {
+    background-color: #f9fafb;
+}
+
+.quantity-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    background-color: #f3f4f6;
+}
+
+.quantity-minus {
+    border-radius: 4px 0 0 4px;
+}
+
+.quantity-plus {
+    border-radius: 0 4px 4px 0;
+}
+
+.quantity-display {
+    width: 40px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-top: 1px solid #d1d5db;
+    border-bottom: 1px solid #d1d5db;
+    font-weight: 500;
+    background: white;
+}
+
+.cart-item {
+    transition: all 0.3s ease-in-out;
+}
+
+.quantity-btn {
+    transition: all 0.15s ease;
+}
+
+.quantity-display {
+    transition: all 0.2s ease;
+}
+
+.price-change {
+    transition: all 0.3s ease;
+}
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="max-w-6xl mx-auto my-8 px-4">
+    <!-- Notification Container for AJAX -->
+    <div id="ajax-notifications" class="fixed top-20 right-4 z-40 space-y-2"></div>
+    
     <!-- Page Header -->
     <div class="mb-8">
         <h1 class="text-3xl font-bold text-[#8f3232] mb-2">Shopping Cart</h1>
@@ -17,7 +106,7 @@
         <div class="lg:col-span-2">
             <div class="bg-white rounded-lg shadow-md">
                 {% for item in cart.items.all %}
-                <div class="flex items-center p-6 border-b border-gray-200 last:border-b-0">
+                <div class="flex items-center p-6 border-b border-gray-200 last:border-b-0 cart-item">
                     <!-- Product Image -->
                     <div class="shrink-0 w-20 h-20 mr-4">
                         {% if item.product.images.exists %}
@@ -38,10 +127,8 @@
                     <div class="grow">
                         <h3 class="font-semibold text-gray-800">{{ item.product.name }}</h3>
                         <p class="text-sm text-gray-600">{{ item.product.category.name }}</p>
-                        <!-- CHANGE: base_price instead of price -->
                         <p class="text-lg font-bold text-[#8f3232]">Rs. {{ item.product.base_price }}</p>
                         
-                        <!-- Remove stock warnings since you don't have stock tracking -->
                         {% if not item.product.available %}
                         <div class="mt-2 p-2 bg-red-100 rounded text-red-700 text-sm">
                             ⚠️ This product is currently unavailable
@@ -55,27 +142,23 @@
 
                     <!-- Quantity Controls -->
                     <div class="flex items-center space-x-3">
-                        <form method="post" action="{% url 'cart:cart_update' item.product.id %}" class="flex items-center">
+                        <!-- Update Quantity Form -->
+                        <form method="post" action="{% url 'cart:cart_update' item.product.id %}" 
+                              class="update-cart-form quantity-controls">
                             {% csrf_token %}
-                            <button type="submit" name="quantity" value="{{ item.quantity|add:'-1' }}" 
-                                    class="w-8 h-8 flex items-center justify-center border border-gray-300 rounded-l hover:bg-gray-100 
-                                           {% if item.quantity <= 1 %}opacity-50 cursor-not-allowed{% endif %}"
+                            <button type="button" class="quantity-btn quantity-minus" 
                                     {% if item.quantity <= 1 %}disabled{% endif %}>
                                 −
                             </button>
-                            <span class="w-12 text-center border-y border-gray-300 py-1 font-medium">
-                                {{ item.quantity }}
-                            </span>
-                            <button type="submit" name="quantity" value="{{ item.quantity|add:'1' }}" 
-                                    class="w-8 h-8 flex items-center justify-center border border-gray-300 rounded-r hover:bg-gray-100
-                                           {% if item.quantity >= 20 %}opacity-50 cursor-not-allowed{% endif %}"
+                            <span class="quantity-display">{{ item.quantity }}</span>
+                            <button type="button" class="quantity-btn quantity-plus" 
                                     {% if item.quantity >= 20 %}disabled{% endif %}>
                                 +
                             </button>
                         </form>
 
                         <!-- Remove Button -->
-                        <form method="post" action="{% url 'cart:cart_remove' item.product.id %}">
+                        <form method="post" action="{% url 'cart:cart_remove' item.product.id %}" class="remove-cart-form">
                             {% csrf_token %}
                             <button type="submit" class="text-red-500 hover:text-red-700 p-2" 
                                     title="Remove from cart">
@@ -90,7 +173,6 @@
                     <div class="text-right min-w-24">
                         <p class="text-lg font-bold text-gray-800">Rs. {{ item.total_price }}</p>
                         {% if item.quantity > 1 %}
-                        <!-- CHANGE: base_price instead of price -->
                         <p class="text-sm text-gray-500">(Rs. {{ item.product.base_price }} each)</p>
                         {% endif %}
                     </div>
@@ -100,19 +182,13 @@
 
             <!-- Clear Cart Button -->
             <div class="mt-4 flex justify-between items-center">
-                <form method="post" action="{% url 'cart:cart_clear' %}">
+                <form method="post" action="{% url 'cart:cart_clear' %}" id="clear-cart-form">
                     {% csrf_token %}
                     <button type="submit" class="text-red-600 hover:text-red-800 font-medium px-4 py-2 
                                                   hover:bg-red-50 rounded-lg transition">
                         Clear Entire Cart
                     </button>
                 </form>
-                
-                <!-- Cart summary for mobile -->
-                <div class="block lg:hidden text-right">
-                    <p class="text-gray-600">Total: <span class="font-bold text-[#8f3232]">Rs. {{ cart.total_price }}</span></p>
-                    <p class="text-sm text-gray-500">{{ cart.total_items }} item{{ cart.total_items|pluralize }}</p>
-                </div>
             </div>
         </div>
 
@@ -205,4 +281,7 @@
     </div>
     {% endif %}
 </div>
+
+<script src="{% static 'js/cart.js' %}"></script>
+
 {% endblock %}

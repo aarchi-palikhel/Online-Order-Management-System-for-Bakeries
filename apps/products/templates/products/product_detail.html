@@ -5,6 +5,9 @@
 
 {% block content %}
 <div class="max-w-7xl mx-auto px-4 py-8">
+    <!-- Notification messages for AJAX -->
+    <div id="ajax-notifications" class="fixed top-4 right-4 z-50 space-y-2"></div>
+    
     <!-- Breadcrumb -->
     <nav class="mb-6">
         <ol class="flex items-center space-x-2 text-sm">
@@ -80,7 +83,7 @@
                             {% endif %}
                             
                             {% if product.is_cake %}
-                            <span class="bg-purple-500 text-white text-xs font-bold px-3 py-1 rounded">
+                            <span class="bg-[#c98276] text-white text-xs font-bold px-3 py-1 rounded">
                                 🎂 Custom Cake
                             </span>
                             {% endif %}
@@ -149,14 +152,14 @@
                                 <!-- Custom Cake Order Button -->
                                 <div class="text-center">
                                     <a href="{% url 'orders:customize_cake' product.id %}" 
-                                       class="inline-block w-full bg-linear-to-r from-purple-600 to-purple-700 hover:from-purple-700 hover:to-purple-800 text-white font-bold py-3 px-6 rounded-lg transition duration-200 shadow hover:shadow-lg">
+                                       class="inline-block w-full bg-linear-to-r from-[#c98276] to-[#d29985] hover:from-[#c98276] hover:to-[#d29985] text-white font-bold py-3 px-6 rounded-lg transition duration-200 shadow hover:shadow-lg">
                                         🎂 Customize & Order Cake
                                     </a>
                                 </div>
                                 {% else %}
                                 <!-- Regular Product Add to Cart -->
                                 <div>
-                                    <form method="post" action="{% url 'cart:cart_add' product.id %}" class="space-y-4">
+                                    <form method="post" action="{% url 'cart:cart_add' product.id %}" class="space-y-4" id="add-to-cart-form">
                                         {% csrf_token %}
                                         <input type="hidden" name="override" value="false">
                                         <div class="flex items-center justify-between bg-gray-50 p-4 rounded-lg">
@@ -185,14 +188,20 @@
                                             
                                             <div class="text-right">
                                                 <span class="text-gray-500 text-sm">Total:</span>
-                                                <div class="text-2xl font-bold text-amber-600">Rs. <span id="total-price">{{ product.base_price }}</span></div>
+                                                <div class="text-2xl font-bold text-amber-600"> <span id="total-price">{{ product.base_price }}</span></div>
                                             </div>
                                         </div>
                                         
                                         <!-- Add to Cart Button -->
                                         <button type="submit" 
-                                                class="w-full bg-amber-500 hover:bg-amber-600 text-white font-bold py-3 px-6 rounded-lg transition duration-200 shadow-md hover:shadow-lg">
-                                            🛒 Add to Cart
+                                                class="w-full bg-amber-500 hover:bg-amber-600 text-white font-bold py-3 px-6 rounded-lg transition duration-200 shadow-md hover:shadow-lg relative flex items-center justify-center">
+                                            <span id="add-to-cart-text">🛒 Add to Cart</span>
+                                            <span id="add-to-cart-spinner" class="ml-2 hidden">
+                                                <svg class="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                                </svg>
+                                            </span>
                                         </button>
                                     </form>
                                 </div>
@@ -240,55 +249,25 @@
     {% endif %}
 </div>
 
-<script>
-document.addEventListener('DOMContentLoaded', function() {
-    // Quantity controls and price calculation
-    const quantityInput = document.getElementById('quantity');
-    const totalPriceElement = document.getElementById('total-price');
-    
-    if (quantityInput && totalPriceElement) {
-        const basePrice = parseFloat('{{ product.base_price|escapejs }}');
-        
-        function updateTotalPrice() {
-            const quantity = parseInt(quantityInput.value) || 1;
-            const total = basePrice * quantity;
-            totalPriceElement.textContent = total.toFixed(2);
-        }
-        
-        // Increase quantity
-        const increaseBtn = document.querySelector('.increase-quantity');
-        if (increaseBtn) {
-            increaseBtn.addEventListener('click', function() {
-                let currentValue = parseInt(quantityInput.value) || 1;
-                if (currentValue < 10) {
-                    quantityInput.value = currentValue + 1;
-                    updateTotalPrice();
-                }
-            });
-        }
-
-        // Decrease quantity
-        const decreaseBtn = document.querySelector('.decrease-quantity');
-        if (decreaseBtn) {
-            decreaseBtn.addEventListener('click', function() {
-                let currentValue = parseInt(quantityInput.value) || 1;
-                if (currentValue > 1) {
-                    quantityInput.value = currentValue - 1;
-                    updateTotalPrice();
-                }
-            });
-        }
-        
-        // Update on direct input
-        quantityInput.addEventListener('input', updateTotalPrice);
-        
-        // Initial update
-        updateTotalPrice();
-    }
-});
-</script>
+<script src="{% static 'js/product_detail.js' %}"></script>
 
 <style>
+/* Animation for notifications */
+@keyframes slide-in {
+    from {
+        transform: translateX(100%);
+        opacity: 0;
+    }
+    to {
+        transform: translateX(0);
+        opacity: 1;
+    }
+}
+
+.animate-slide-in {
+    animation: slide-in 0.3s ease-out;
+}
+
 /* Ensure both halves have equal height */
 .min-h-\[500px\] {
     min-height: 500px;
@@ -316,23 +295,6 @@ document.addEventListener('DOMContentLoaded', function() {
 
 .pr-2::-webkit-scrollbar-thumb:hover {
     background: #9ca3af;
-}
-
-/* Force button colors */
-.bg-amber-500 {
-    background-color: #f59e0b !important;
-}
-
-.bg-amber-500:hover {
-    background-color: #d97706 !important;
-}
-
-.bg-purple-600 {
-    background-color: #7c3aed !important;
-}
-
-.bg-purple-600:hover {
-    background-color: #6d28d9 !important;
 }
 </style>
 {% endblock %}

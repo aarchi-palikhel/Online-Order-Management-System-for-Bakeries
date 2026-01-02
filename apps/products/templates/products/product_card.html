@@ -1,4 +1,6 @@
-<div class="bg-white rounded-lg shadow-lg overflow-hidden hover:shadow-xl transition duration-300 border border-gray-100">
+{% load static %}
+<div class="bg-white rounded-lg shadow-lg overflow-hidden hover:shadow-xl transition duration-300 border border-gray-100 product-card" 
+     data-product-id="{{ product.id }}">
     <a href="{% url 'products:product_detail' product_id=product.id %}">
         <div class="h-48 bg-gray-50 flex items-center justify-center relative overflow-hidden">
             {% if product.images.exists %}
@@ -25,7 +27,6 @@
             {% endif %}
             
             <!-- Badges -->
-            
             {% if product.is_featured %}
             <div class="absolute top-2 left-2">
                 <span class="bg-amber-500 text-white text-xs font-bold px-2 py-1 rounded-full">
@@ -46,7 +47,7 @@
     
     <div class="p-6">
         <a href="{% url 'products:product_detail' product_id=product.id %}">
-            <h3 class="text-xl font-bold text-gray-800 mb-2 hover:text-amber-600 transition duration-200">
+            <h3 class="text-xl font-bold text-gray-800 mb-2 hover:text-amber-600 transition duration-200 product-name">
                 {{ product.name }}
             </h3>
         </a>
@@ -92,12 +93,16 @@
                         Customize Order
                     </a>
                     {% else %}
-                    <form method="post" action="{% url 'cart:cart_add' product.id %}" class="add-to-cart-form">
+                    <form method="post" 
+                          action="{% url 'cart:cart_add' product.id %}" 
+                          class="add-to-cart-form"
+                          data-product-id="{{ product.id }}">
                         {% csrf_token %}
                         <input type="hidden" name="override" value="false">
                         <input type="hidden" name="quantity" value="1">
                         <button type="submit" 
-                                class="bg-amber-500 hover:bg-amber-600 text-white px-4 py-2 rounded-lg transition duration-200 text-sm add-to-cart-btn">
+                                class="bg-amber-500 hover:bg-amber-600 text-white px-4 py-2 rounded-lg transition duration-200 text-sm add-to-cart-btn"
+                                data-product-id="{{ product.id }}">
                             Add to Cart
                         </button>
                     </form>

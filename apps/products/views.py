@@ -3,6 +3,8 @@ from django.shortcuts import redirect, render, get_object_or_404
 from django.db.models import Q
 from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
 from django.utils import timezone
+from django.http import JsonResponse
+from django.contrib import messages
 from .models import Product, Category, ProductImage
 from .forms import ProductSearchForm
 from django.contrib.auth.decorators import login_required
@@ -65,14 +67,14 @@ def product_list(request, category_slug=None):
         'page_obj': products_page,
         'is_paginated': products_page.has_other_pages(),
         'form': form,
-        'cart_forms': paginated_cart_forms,  # Changed from add_to_cart_form
+        'cart_forms': paginated_cart_forms,
     }
     return render(request, 'products/product_list.html', context)
 
 def product_detail(request, product_id):
     """Display detailed view of a single product"""
     product = get_object_or_404(
-        Product.objects.prefetch_related('images', 'design_references'),
+        Product.objects.prefetch_related('images'),
         id=product_id,
         available=True
     )
@@ -86,8 +88,44 @@ def product_detail(request, product_id):
     # Prepare cake customization form data if product is a cake
     cake_form = None
     if product.is_cake:
-        
         cake_form = CakeCustomizationForm(product=product)
+    
+    # Handle AJAX add to cart
+    if request.method == 'POST' and request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+        form = CartAddProductForm(request.POST)
+        if form.is_valid():
+            # Get or create cart
+            cart = request.session.get('cart', {})
+            product_id_str = str(product.id)
+            
+            quantity = form.cleaned_data['quantity']
+            override = form.cleaned_data.get('override', False)
+            
+            if product_id_str in cart and not override:
+                cart[product_id_str]['quantity'] += quantity
+            else:
+                cart[product_id_str] = {
+                    'quantity': quantity,
+                    'price': str(product.base_price)
+                }
+            
+            request.session['cart'] = cart
+            request.session.modified = True
+            
+            # Calculate total items in cart
+            total_items = sum(item['quantity'] for item in cart.values())
+            
+            return JsonResponse({
+                'success': True,
+                'message': f'{product.name} added to cart!',
+                'cart_item_count': total_items,
+                'product_name': product.name
+            })
+        else:
+            return JsonResponse({
+                'success': False,
+                'message': 'Invalid form data'
+            })
     
     context = {
         'product': product,
@@ -125,3 +163,7 @@ def product_search(request):
     }
     return render(request, 'products/product_search.html', context)
 
+# Helper function to get cart count (used in template context processor if needed)
+def get_cart_count(request):
+    cart = request.session.get('cart', {})
+    return sum(item['quantity'] for item in cart.values())

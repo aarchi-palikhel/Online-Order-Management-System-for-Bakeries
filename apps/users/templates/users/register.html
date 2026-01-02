@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% load static %}
 
 {% block title %}Register - Live Bakery{% endblock %}
 
@@ -17,13 +18,11 @@
             </label>
             
             {% if field.name == 'password1' %}
-                <!-- Password Input without eye button -->
-                <input type="password" name="{{ field.name }}" id="{{ field.id_for_label }}" 
+                <input type="password" name="{{ field.name }}" id="password1" 
                        class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#8f3232]"
                        placeholder="Enter your password">
             {% elif field.name == 'password2' %}
-                <!-- Confirm Password Input without eye button -->
-                <input type="password" name="{{ field.name }}" id="{{ field.id_for_label }}" 
+                <input type="password" name="{{ field.name }}" id="password2" 
                        class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#8f3232]"
                        placeholder="Confirm your password">
             {% else %}
@@ -41,6 +40,14 @@
         </div>
         {% endfor %}
         
+        <div class="flex items-center space-x-2 pt-2">
+            <input type="checkbox" id="showPasswords" 
+                   class="h-4 w-4 text-[#8f3232] focus:ring-[#8f3232] border-gray-300 rounded">
+            <label for="showPasswords" class="block text-sm text-gray-700 cursor-pointer">
+                Show passwords
+            </label>
+        </div>
+        
         <button type="submit" class="w-full bg-[#8f3232] text-white py-2 px-4 rounded-md hover:bg-[#7a2a2a] transition duration-200 font-medium">
             Create Account
         </button>
@@ -53,4 +60,7 @@
         </p>
     </div>
 </div>
+
+<script src="{% static 'js/register.js' %}"></script>
+
 {% endblock %}

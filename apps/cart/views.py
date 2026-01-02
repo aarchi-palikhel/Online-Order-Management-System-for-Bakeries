@@ -67,6 +67,9 @@ def cart_add(request, product_id):
     print(f"DEBUG: User: {request.user}, Authenticated: {request.user.is_authenticated}")
     print(f"DEBUG: POST data: {request.POST}")
     
+    # Check if it's an AJAX request
+    is_ajax = request.headers.get('x-requested-with') == 'XMLHttpRequest'
+    
     try:
         product = get_object_or_404(Product, id=product_id)
         print(f"DEBUG: Found product: {product.name}")
@@ -75,14 +78,22 @@ def cart_add(request, product_id):
         # Check if product is available (boolean field)
         if not product.available:
             print(f"DEBUG: Product not available")
-            messages.error(request, f"Sorry, {product.name} is currently unavailable.")
-            return redirect('products:product_list')
+            if not is_ajax:
+                messages.error(request, f"Sorry, {product.name} is currently unavailable.")
+            return JsonResponse({
+                'success': False,
+                'message': f"Sorry, {product.name} is currently unavailable."
+            }) if is_ajax else redirect('products:product_list')
         
         # Check if product is in stock (boolean field)
         if not product.in_stock:
             print(f"DEBUG: Product not in stock")
-            messages.error(request, f"Sorry, {product.name} is out of stock.")
-            return redirect('products:product_list')
+            if not is_ajax:
+                messages.error(request, f"Sorry, {product.name} is out of stock.")
+            return JsonResponse({
+                'success': False,
+                'message': f"Sorry, {product.name} is out of stock."
+            }) if is_ajax else redirect('products:product_list')
         
         cart, created = Cart.objects.get_or_create(user=request.user)
         print(f"DEBUG: Cart {'created' if created else 'found'} for user")
@@ -111,10 +122,6 @@ def cart_add(request, product_id):
                     quantity = 1
                     override = False
             
-            # Note: Your Product model doesn't have a stock quantity field!
-            # It only has boolean fields: available and in_stock
-            # You might want to add a stock_quantity field if you need to track actual quantities
-            
             # Use transaction to ensure data integrity
             with transaction.atomic():
                 cart_item, item_created = CartItem.objects.get_or_create(
@@ -131,32 +138,44 @@ def cart_add(request, product_id):
                     # Check against maximum allowed quantity (20)
                     if new_quantity > 20:
                         print(f"DEBUG: New quantity {new_quantity} exceeds maximum 20")
-                        messages.warning(
-                            request,
-                            f"Maximum quantity per item is 20. Updated to maximum allowed."
-                        )
+                        if not is_ajax:
+                            messages.warning(
+                                request,
+                                f"Maximum quantity per item is 20. Updated to maximum allowed."
+                            )
+                        else:
+                            # For AJAX, include this in the response
+                            max_warning = "Maximum quantity per item is 20. Updated to maximum allowed."
                         new_quantity = 20
+                    else:
+                        max_warning = None
                     
                     cart_item.quantity = new_quantity
                     cart_item.save()
                     print(f"DEBUG: CartItem saved with quantity {cart_item.quantity}")
             
-            messages.success(request, f"Added {product.name} to cart!")
-            print(f"DEBUG: Success message set")
-            
-            # Handle AJAX requests
-            if request.headers.get('x-requested-with') == 'XMLHttpRequest':
+            # Handle AJAX requests differently from regular requests
+            if is_ajax:
                 print(f"DEBUG: AJAX request detected")
-                return JsonResponse({
+                response_data = {
                     'success': True,
                     'cart_count': cart.total_items,
                     'message': f"Added {product.name} to cart!"
-                })
-            
-            # Default redirect - back to product list or referrer
-            redirect_url = request.META.get('HTTP_REFERER', 'products:product_list')
-            print(f"DEBUG: Redirecting to: {redirect_url}")
-            return redirect(redirect_url)
+                }
+                if 'max_warning' in locals() and max_warning:
+                    response_data['warning'] = max_warning
+                
+                return JsonResponse(response_data)
+            else:
+                # Only set Django messages for non-AJAX requests
+                print(f"DEBUG: Regular request - setting Django message")
+                messages.success(request, f"Added {product.name} to cart!")
+                if 'max_warning' in locals() and max_warning:
+                    messages.warning(request, max_warning)
+                
+                redirect_url = request.META.get('HTTP_REFERER', 'products:product_list')
+                print(f"DEBUG: Redirecting to: {redirect_url}")
+                return redirect(redirect_url)
             
         else:
             # If it's not a POST request, redirect back
@@ -166,19 +185,32 @@ def cart_add(request, product_id):
     
     except Product.DoesNotExist:
         print(f"DEBUG: Product.DoesNotExist error")
-        messages.error(request, "Product not found.")
-        return redirect('products:product_list')
+        if not is_ajax:
+            messages.error(request, "Product not found.")
+        return JsonResponse({
+            'success': False,
+            'message': "Product not found."
+        }) if is_ajax else redirect('products:product_list')
+    
     except Exception as e:
         print(f"DEBUG: General exception: {str(e)}")
         print(f"DEBUG: Exception type: {type(e).__name__}")
         import traceback
         print(f"DEBUG: Traceback: {traceback.format_exc()}")
-        messages.error(request, f"An error occurred while adding to cart: {str(e)}")
-        return redirect('products:product_list')
+        
+        if not is_ajax:
+            messages.error(request, f"An error occurred while adding to cart: {str(e)}")
+        
+        return JsonResponse({
+            'success': False,
+            'message': f"An error occurred while adding to cart: {str(e)}"
+        }) if is_ajax else redirect('products:product_list')
 
 @customer_required
 def cart_remove(request, product_id):
     """Remove a product from the cart"""
+    is_ajax = request.headers.get('x-requested-with') == 'XMLHttpRequest'
+    
     try:
         product = get_object_or_404(Product, id=product_id)
         cart = get_object_or_404(Cart, user=request.user)
@@ -187,26 +219,39 @@ def cart_remove(request, product_id):
         product_name = cart_item.product.name
         cart_item.delete()
         
-        messages.success(request, f"Removed {product_name} from cart!")
-        
-        # Handle AJAX requests
-        if request.headers.get('x-requested-with') == 'XMLHttpRequest':
+        if is_ajax:
             return JsonResponse({
                 'success': True,
                 'cart_count': cart.total_items,
                 'message': f"Removed {product_name} from cart!"
             })
+        else:
+            messages.success(request, f"Removed {product_name} from cart!")
+            return redirect('cart:cart_detail')
     
     except CartItem.DoesNotExist:
-        messages.error(request, "Item not found in your cart.")
-    except Exception as e:
-        messages.error(request, "An error occurred while removing item.")
+        error_msg = "Item not found in your cart."
+        if not is_ajax:
+            messages.error(request, error_msg)
+        return JsonResponse({
+            'success': False,
+            'message': error_msg
+        }) if is_ajax else redirect('cart:cart_detail')
     
-    return redirect('cart:cart_detail')
+    except Exception as e:
+        error_msg = "An error occurred while removing item."
+        if not is_ajax:
+            messages.error(request, error_msg)
+        return JsonResponse({
+            'success': False,
+            'message': error_msg
+        }) if is_ajax else redirect('cart:cart_detail')
 
 @customer_required
 def cart_update(request, product_id):
     """Update product quantity in cart"""
+    is_ajax = request.headers.get('x-requested-with') == 'XMLHttpRequest'
+    
     try:
         product = get_object_or_404(Product, id=product_id)
         cart = get_object_or_404(Cart, user=request.user)
@@ -217,76 +262,271 @@ def cart_update(request, product_id):
                 
                 # Validate quantity
                 if quantity < 0:
-                    messages.error(request, "Quantity cannot be negative.")
-                    return redirect('cart:cart_detail')
+                    error_msg = "Quantity cannot be negative."
+                    if not is_ajax:
+                        messages.error(request, error_msg)
+                    return JsonResponse({
+                        'success': False,
+                        'message': error_msg
+                    }) if is_ajax else redirect('cart:cart_detail')
                 
                 cart_item = CartItem.objects.get(cart=cart, product=product)
                 
                 if quantity == 0:
                     # Remove item if quantity is 0
                     cart_item.delete()
-                    messages.success(request, f"Removed {product.name} from cart!")
+                    success_msg = f"Removed {product.name} from cart!"
                     
+                    if is_ajax:
+                        cart.refresh_from_db()
+                        return JsonResponse({
+                            'success': True,
+                            'cart_count': cart.total_items,
+                            'message': success_msg,
+                            'cart_data': {
+                                'total_items': cart.total_items,
+                                'total_price': cart.total_price,
+                            }
+                        })
+                    else:
+                        messages.success(request, success_msg)
+                        return redirect('cart:cart_detail')
+                
                 elif quantity > 20:
                     # Enforce maximum quantity
-                    messages.warning(request, "Maximum quantity per item is 20.")
+                    warning_msg = "Maximum quantity per item is 20."
+                    info_msg = f"Updated {product.name} quantity to maximum (20)."
                     quantity = 20
                     cart_item.quantity = quantity
                     cart_item.save()
-                    messages.info(request, f"Updated {product.name} quantity to maximum (20).")
                     
-                # Note: Your Product model doesn't have stock quantity
-                # You can't check quantity > product.in_stock because in_stock is boolean
-                # If you need stock quantity, add a stock_quantity field to Product model
+                    if is_ajax:
+                        cart.refresh_from_db()
+                        cart_item.refresh_from_db()
+                        return JsonResponse({
+                            'success': True,
+                            'cart_count': cart.total_items,
+                            'total_price': cart.total_price,
+                            'item_total': cart_item.total_price,
+                            'item_price': float(product.base_price),
+                            'warning': warning_msg,
+                            'message': info_msg,
+                            'cart_data': {
+                                'total_items': cart.total_items,
+                                'total_price': cart.total_price,
+                                'item_total': cart_item.total_price,
+                                'item_price': float(product.base_price),
+                                'quantity': quantity
+                            }
+                        })
+                    else:
+                        messages.warning(request, warning_msg)
+                        messages.info(request, info_msg)
+                        return redirect('cart:cart_detail')
                     
                 else:
                     # Normal update
                     cart_item.quantity = quantity
                     cart_item.save()
-                    messages.success(request, f"Updated {product.name} quantity to {quantity}!")
-                
-                # Handle AJAX requests
-                if request.headers.get('x-requested-with') == 'XMLHttpRequest':
-                    cart.refresh_from_db()
-                    return JsonResponse({
-                        'success': True,
-                        'cart_count': cart.total_items,
-                        'total_price': cart.total_price,
-                        'item_total': cart_item.total_price if quantity > 0 else 0
-                    })
+                    success_msg = f"Updated {product.name} quantity to {quantity}!"
+                    
+                    if is_ajax:
+                        cart.refresh_from_db()
+                        cart_item.refresh_from_db()
+                        return JsonResponse({
+                            'success': True,
+                            'cart_count': cart.total_items,
+                            'total_price': cart.total_price,
+                            'item_total': cart_item.total_price,
+                            'item_price': float(product.base_price),
+                            'message': success_msg,
+                            'cart_data': {
+                                'total_items': cart.total_items,
+                                'total_price': cart.total_price,
+                                'item_total': cart_item.total_price,
+                                'item_price': float(product.base_price),
+                                'quantity': quantity
+                            }
+                        })
+                    else:
+                        messages.success(request, success_msg)
+                        return redirect('cart:cart_detail')
             
             except ValueError:
-                messages.error(request, "Invalid quantity value.")
+                error_msg = "Invalid quantity value."
+                if not is_ajax:
+                    messages.error(request, error_msg)
+                return JsonResponse({
+                    'success': False,
+                    'message': error_msg
+                }) if is_ajax else redirect('cart:cart_detail')
+            
             except CartItem.DoesNotExist:
-                messages.error(request, "Item not found in your cart.")
+                error_msg = "Item not found in your cart."
+                if not is_ajax:
+                    messages.error(request, error_msg)
+                return JsonResponse({
+                    'success': False,
+                    'message': error_msg
+                }) if is_ajax else redirect('cart:cart_detail')
+        
+        return redirect('cart:cart_detail')
     
     except Exception as e:
-        messages.error(request, "An error occurred while updating cart.")
+        error_msg = "An error occurred while updating cart."
+        if not is_ajax:
+            messages.error(request, error_msg)
+        return JsonResponse({
+            'success': False,
+            'message': error_msg
+        }) if is_ajax else redirect('cart:cart_detail') 
+    """Update product quantity in cart"""
+    is_ajax = request.headers.get('x-requested-with') == 'XMLHttpRequest'
     
-    return redirect('cart:cart_detail')
+    try:
+        product = get_object_or_404(Product, id=product_id)
+        cart = get_object_or_404(Cart, user=request.user)
+        
+        if request.method == 'POST':
+            try:
+                quantity = int(request.POST.get('quantity', 1))
+                
+                # Validate quantity
+                if quantity < 0:
+                    error_msg = "Quantity cannot be negative."
+                    if not is_ajax:
+                        messages.error(request, error_msg)
+                    return JsonResponse({
+                        'success': False,
+                        'message': error_msg
+                    }) if is_ajax else redirect('cart:cart_detail')
+                
+                cart_item = CartItem.objects.get(cart=cart, product=product)
+                
+                if quantity == 0:
+                    # Remove item if quantity is 0
+                    cart_item.delete()
+                    success_msg = f"Removed {product.name} from cart!"
+                    
+                    if is_ajax:
+                        cart.refresh_from_db()
+                        return JsonResponse({
+                            'success': True,
+                            'cart_count': cart.total_items,
+                            'message': success_msg
+                        })
+                    else:
+                        messages.success(request, success_msg)
+                        return redirect('cart:cart_detail')
+                
+                elif quantity > 20:
+                    # Enforce maximum quantity
+                    warning_msg = "Maximum quantity per item is 20."
+                    info_msg = f"Updated {product.name} quantity to maximum (20)."
+                    quantity = 20
+                    cart_item.quantity = quantity
+                    cart_item.save()
+                    
+                    if is_ajax:
+                        cart.refresh_from_db()
+                        return JsonResponse({
+                            'success': True,
+                            'cart_count': cart.total_items,
+                            'total_price': cart.total_price,
+                            'item_total': cart_item.total_price,
+                            'warning': warning_msg,
+                            'message': info_msg
+                        })
+                    else:
+                        messages.warning(request, warning_msg)
+                        messages.info(request, info_msg)
+                        return redirect('cart:cart_detail')
+                    
+                else:
+                    # Normal update
+                    cart_item.quantity = quantity
+                    cart_item.save()
+                    success_msg = f"Updated {product.name} quantity to {quantity}!"
+                    
+                    if is_ajax:
+                        cart.refresh_from_db()
+                        return JsonResponse({
+                            'success': True,
+                            'cart_count': cart.total_items,
+                            'total_price': cart.total_price,
+                            'item_total': cart_item.total_price,
+                            'message': success_msg
+                        })
+                    else:
+                        messages.success(request, success_msg)
+                        return redirect('cart:cart_detail')
+            
+            except ValueError:
+                error_msg = "Invalid quantity value."
+                if not is_ajax:
+                    messages.error(request, error_msg)
+                return JsonResponse({
+                    'success': False,
+                    'message': error_msg
+                }) if is_ajax else redirect('cart:cart_detail')
+            
+            except CartItem.DoesNotExist:
+                error_msg = "Item not found in your cart."
+                if not is_ajax:
+                    messages.error(request, error_msg)
+                return JsonResponse({
+                    'success': False,
+                    'message': error_msg
+                }) if is_ajax else redirect('cart:cart_detail')
+        
+        return redirect('cart:cart_detail')
+    
+    except Exception as e:
+        error_msg = "An error occurred while updating cart."
+        if not is_ajax:
+            messages.error(request, error_msg)
+        return JsonResponse({
+            'success': False,
+            'message': error_msg
+        }) if is_ajax else redirect('cart:cart_detail')
 
 @customer_required
 def cart_clear(request):
     """Clear all items from cart"""
+    is_ajax = request.headers.get('x-requested-with') == 'XMLHttpRequest'
+    
     try:
         cart = get_object_or_404(Cart, user=request.user)
         cart_items_count = cart.items.count()
         
         if cart_items_count > 0:
             cart.items.all().delete()
-            messages.success(request, f"Cart cleared! Removed {cart_items_count} items.")
+            success_msg = f"Cart cleared! Removed {cart_items_count} items."
+            
+            if is_ajax:
+                return JsonResponse({
+                    'success': True,
+                    'cart_count': 0,
+                    'message': success_msg
+                })
+            else:
+                messages.success(request, success_msg)
+                return redirect('cart:cart_detail')
         else:
-            messages.info(request, "Your cart is already empty.")
-        
-        # Handle AJAX requests
-        if request.headers.get('x-requested-with') == 'XMLHttpRequest':
+            info_msg = "Your cart is already empty."
+            if not is_ajax:
+                messages.info(request, info_msg)
             return JsonResponse({
                 'success': True,
                 'cart_count': 0,
-                'message': 'Cart cleared successfully!'
-            })
+                'message': info_msg
+            }) if is_ajax else redirect('cart:cart_detail')
     
     except Exception as e:
-        messages.error(request, "An error occurred while clearing the cart.")
-    
-    return redirect('cart:cart_detail')
+        error_msg = "An error occurred while clearing the cart."
+        if not is_ajax:
+            messages.error(request, error_msg)
+        return JsonResponse({
+            'success': False,
+            'message': error_msg
+        }) if is_ajax else redirect('cart:cart_detail')

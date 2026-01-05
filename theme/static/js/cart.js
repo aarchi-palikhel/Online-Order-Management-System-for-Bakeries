@@ -2,6 +2,19 @@
 
 console.log('Cart JS loaded - version 1');
 
+// Listen for cart updates from product_detail.js
+document.addEventListener('cartUpdated', function(event) {
+    console.log('Cart update event received:', event.detail);
+    
+    if (event.detail && event.detail.count !== undefined) {
+        if (typeof updateCartCount === 'function') {
+            updateCartCount(event.detail.count);
+        } else {
+            console.warn('updateCartCount function not available in cart.js');
+        }
+    }
+});
+
 // Simple notification
 function showNotification(message, type = 'success') {
     const container = document.getElementById('ajax-notifications');

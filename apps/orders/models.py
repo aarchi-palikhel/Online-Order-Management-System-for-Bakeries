@@ -16,10 +16,67 @@ class Order(models.Model):
     
     PAYMENT_CHOICES = [
         ('cod', 'Cash on Delivery'),
-        ('online', 'Online Payment'),
+        ('esewa', 'eSewa'),
     ]
     
-    # Explicit ID field (optional, Django creates it automatically)
+    PAYMENT_STATUS_CHOICES = [
+        ('pending', 'Payment Pending'),
+        ('paid', 'Paid'),
+        ('failed', 'Payment Failed'),
+        ('refunded', 'Refunded'),
+        ('cancelled', 'Cancelled'),
+    ]
+
+    DELIVERY_CHOICES = [
+        ('delivery', 'Home Delivery'),
+        ('pickup', 'Self Pickup'),
+    ]
+
+    # Add these fields to the Order model
+    delivery_type = models.CharField(
+        max_length=20, 
+        choices=DELIVERY_CHOICES, 
+        default='delivery'
+    )
+
+    # Add subtotal field (cart total without delivery)
+    subtotal = models.DecimalField(
+        max_digits=10, 
+        decimal_places=2, 
+        default=0
+    )
+    
+    # Add delivery fee field
+    delivery_fee = models.DecimalField(
+        max_digits=10, 
+        decimal_places=2, 
+        default=0
+    )
+
+    # Payment method - ONLY ONE DEFINITION
+    payment_method = models.CharField(
+        max_length=20, 
+        choices=PAYMENT_CHOICES, 
+        default='cod'
+    )
+
+    # Payment status - CharField with choices
+    payment_status = models.CharField(
+        max_length=20,
+        choices=PAYMENT_STATUS_CHOICES,
+        default='pending'
+    )
+
+    # Add payment transaction reference
+    payment_transaction = models.ForeignKey(
+        'payment.PaymentTransaction',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='orders'
+    )
+    
+    # Explicit ID field
     id = models.BigAutoField(primary_key=True)
     
     user = models.ForeignKey(
@@ -28,10 +85,11 @@ class Order(models.Model):
         related_name='orders'
     )
     order_number = models.CharField(max_length=20, unique=True)
-    total_amount = models.DecimalField(max_digits=10, decimal_places=2)
+    total_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    
+    # Status field
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
-    payment_method = models.CharField(max_length=20, choices=PAYMENT_CHOICES, default='cod')
-    payment_status = models.BooleanField(default=False)
+    
     special_instructions = models.TextField(blank=True)
     delivery_address = models.TextField(blank=True)
     phone_number = models.CharField(max_length=15, blank=True)
@@ -44,11 +102,16 @@ class Order(models.Model):
         verbose_name_plural = 'Orders'
     
     def save(self, *args, **kwargs):
+        # SIMPLIFIED save method - only generate order number
+        # All calculations should be done in views, not here
+        
+        # Generate order number if not exists
         if not self.order_number:
-            # Generate a unique order number like ORD-XXXXXX
             prefix = 'ORD-'
             unique_id = str(uuid.uuid4().hex[:6]).upper()
             self.order_number = f"{prefix}{unique_id}"
+        
+        # Call parent save without additional logic
         super().save(*args, **kwargs)
     
     def __str__(self):
@@ -68,6 +131,17 @@ class Order(models.Model):
         return status_classes.get(self.status, 'bg-gray-100 text-gray-800')
     
     @property
+    def get_payment_status_display_class(self):
+        """Return CSS class for payment status display"""
+        payment_status_classes = {
+            'pending': 'bg-yellow-100 text-yellow-800',
+            'paid': 'bg-green-100 text-green-800',
+            'failed': 'bg-red-100 text-red-800',
+            'refunded': 'bg-gray-100 text-gray-800',
+        }
+        return payment_status_classes.get(self.payment_status, 'bg-gray-100 text-gray-800')
+    
+    @property
     def item_count(self):
         """Total number of items in order"""
         return sum(item.quantity for item in self.items.all())
@@ -76,6 +150,30 @@ class Order(models.Model):
         """Get URL for order detail view"""
         from django.urls import reverse
         return reverse('orders:order_detail', args=[str(self.id)])
+    
+    def calculate_totals(self):
+        """
+        Calculate subtotal, delivery fee, and total
+        Call this method explicitly when needed, not in save()
+        """
+        if hasattr(self, 'items'):
+            self.subtotal = sum(item.get_total_price() for item in self.items.all())
+        else:
+            self.subtotal = 0
+        
+        # Calculate delivery fee if not already set
+        if not self.delivery_fee and self.delivery_type == 'delivery':
+            # You can implement delivery fee logic here
+            # For now, set a default
+            self.delivery_fee = 0 if self.delivery_type == 'pickup' else 100
+        
+        self.total_amount = self.subtotal + self.delivery_fee
+        
+        # Save with update_fields to avoid recursion
+        self.save(update_fields=['subtotal', 'delivery_fee', 'total_amount'])
+        
+        return self.subtotal, self.delivery_fee, self.total_amount
+
 
 class OrderItem(models.Model):
     # Explicit ID field
@@ -114,8 +212,7 @@ class OrderItem(models.Model):
     def __str__(self):
         return f"OrderItem #{self.id} - {self.quantity} x {self.product.name}"
     
-    @property
-    def total_price(self):
+    def get_total_price(self):
         return self.price * self.quantity
     
     @property
@@ -128,7 +225,7 @@ class OrderItem(models.Model):
         """Display cake flavor with custom flavor if applicable"""
         if self.cake_flavor == 'custom' and self.cake_custom_flavor:
             return f"Custom: {self.cake_custom_flavor}"
-        return self.get_cake_flavor_display() if self.cake_flavor else "Not specified"
+        return self.cake_flavor if self.cake_flavor else "Not specified"
     
     @property
     def display_weight(self):
@@ -136,6 +233,7 @@ class OrderItem(models.Model):
         if self.cake_weight == 'custom' and self.cake_custom_weight:
             return f"Custom: {self.cake_custom_weight} lb"
         return self.cake_weight + " lb" if self.cake_weight else "Not specified"
+
 
 class CakeDesignReference(models.Model):
     """Model for cake design reference images uploaded by customers"""

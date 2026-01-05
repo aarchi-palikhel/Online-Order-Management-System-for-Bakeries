@@ -70,12 +70,14 @@ class OrderItemInline(admin.TabularInline):
 @admin.register(Order)
 class OrderAdmin(admin.ModelAdmin):
     list_display = ['order_id_display', 'order_number', 'user_info', 'total_amount_display', 
-                    'status_display', 'payment_method_display', 'item_count', 'created_at']
-    list_filter = ['status', 'payment_method', 'payment_status', 'created_at']
+                    'status_display', 'payment_method_display', 'payment_status_display',
+                    'delivery_type_display', 'item_count', 'created_at']
+    list_filter = ['status', 'payment_method', 'payment_status', 'delivery_type', 'created_at']
     search_fields = ['order_number', 'user__username', 'user__email', 
                      'user__first_name', 'user__last_name', 'phone_number']
     readonly_fields = ['order_number', 'created_at', 'updated_at', 'total_amount_display',
-                      'item_count_display', 'order_link', 'user_info_display']
+                      'item_count_display', 'order_link', 'user_info_display',
+                      'subtotal_display', 'delivery_fee_display', 'payment_status_display']
     inlines = [OrderItemInline]
     list_per_page = 20
     date_hierarchy = 'created_at'
@@ -83,10 +85,14 @@ class OrderAdmin(admin.ModelAdmin):
     fieldsets = (
         ('Order Information', {
             'fields': ('order_link', 'order_number', 'user_info_display', 'status', 
-                      'total_amount_display', 'item_count_display')
+                      'delivery_type', 'item_count_display')
         }),
         ('Payment Details', {
-            'fields': ('payment_method', 'payment_status'),
+            'fields': ('payment_method', 'payment_status', 'payment_transaction'),
+            'classes': ('collapse',)
+        }),
+        ('Amount Breakdown', {
+            'fields': ('subtotal_display', 'delivery_fee_display', 'total_amount_display'),
             'classes': ('collapse',)
         }),
         ('Delivery Information', {
@@ -139,6 +145,7 @@ class OrderAdmin(admin.ModelAdmin):
     def payment_method_display(self, obj):
         payment_colors = {
             'cod': 'bg-blue-100 text-blue-800',
+            'esewa': 'bg-green-100 text-green-800',
             'online': 'bg-green-100 text-green-800',
             'card': 'bg-purple-100 text-purple-800',
         }
@@ -150,9 +157,41 @@ class OrderAdmin(admin.ModelAdmin):
         )
     payment_method_display.short_description = 'Payment Method'
     
+    def payment_status_display(self, obj):
+        return format_html(
+            '<span class="px-2 py-1 rounded text-xs font-bold {}">{}</span>',
+            obj.get_payment_status_display_class,
+            obj.get_payment_status_display()
+        )
+    payment_status_display.short_description = 'Payment Status'
+    
+    def delivery_type_display(self, obj):
+        delivery_colors = {
+            'delivery': 'bg-blue-100 text-blue-800',
+            'pickup': 'bg-orange-100 text-orange-800',
+        }
+        color_class = delivery_colors.get(obj.delivery_type, 'bg-gray-100 text-gray-800')
+        # Get display value from DELIVERY_CHOICES
+        delivery_choices_dict = dict(obj.DELIVERY_CHOICES)
+        display_value = delivery_choices_dict.get(obj.delivery_type, obj.delivery_type)
+        return format_html(
+            '<span class="px-2 py-1 rounded text-xs font-bold {}">{}</span>',
+            color_class,
+            display_value
+        )
+    delivery_type_display.short_description = 'Delivery Type'
+    
     def item_count_display(self, obj):
         return obj.item_count
     item_count_display.short_description = 'Total Items'
+    
+    def subtotal_display(self, obj):
+        return f"Rs. {obj.subtotal:.2f}"
+    subtotal_display.short_description = 'Subtotal (before delivery)'
+    
+    def delivery_fee_display(self, obj):
+        return f"Rs. {obj.delivery_fee:.2f}"
+    delivery_fee_display.short_description = 'Delivery Fee'
     
     def order_link(self, obj):
         url = reverse('admin:orders_order_change', args=[obj.id])
@@ -160,7 +199,7 @@ class OrderAdmin(admin.ModelAdmin):
     order_link.short_description = 'Order'
     
     def get_queryset(self, request):
-        return super().get_queryset(request).select_related('user').prefetch_related('items', 'items__product')
+        return super().get_queryset(request).select_related('user', 'payment_transaction').prefetch_related('items', 'items__product')
     
     def has_add_permission(self, request):
         # Orders should be created through checkout process, not manually in admin
@@ -183,7 +222,9 @@ class OrderItemAdmin(admin.ModelAdmin):
             'fields': ('order_link', 'product_link', 'quantity', 'price', 'total_price_display')
         }),
         ('Cake Customization', {
-            'fields': ('is_cake_display', 'cake_details_display'),
+            'fields': ('is_cake_display', 'cake_flavor', 'cake_custom_flavor', 
+                      'cake_weight', 'cake_custom_weight', 'cake_tiers', 
+                      'message_on_cake', 'delivery_date', 'special_instructions'),
             'classes': ('collapse',)
         }),
         ('Timestamps', {
@@ -367,7 +408,6 @@ class CakeDesignReferenceAdmin(admin.ModelAdmin):
                 '<a href="{}">Order Item #{}</a>',
                 url, obj.order_item.id
             )
-        return "No order item linked"
     order_item_link.short_description = 'Order Item'
     
     def product_info_display(self, obj):
@@ -387,7 +427,6 @@ class CakeDesignReferenceAdmin(admin.ModelAdmin):
                     details.append(f"<strong>Weight:</strong> {obj.order_item.display_weight}")
             
             return mark_safe('<br>'.join(details))
-        return "No product information"
     product_info_display.short_description = 'Product Details'
     
     def uploaded_at_display(self, obj):

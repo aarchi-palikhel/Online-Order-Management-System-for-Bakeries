@@ -5,73 +5,71 @@ from .models import Order, CakeDesignReference
 import json
 from datetime import datetime
 
-class OrderCreateForm(forms.ModelForm):
-    """Form for creating a new order from cart"""
+# orders/forms.py - Update OrderCreateForm
+class OrderCreateForm(forms.Form):
+    DELIVERY_CHOICES = [
+        ('delivery', 'Home Delivery'),
+        ('pickup', 'Self Pickup'),
+    ]
+    
+    PAYMENT_CHOICES = [
+        ('cod', 'Cash on Delivery'),
+        ('esewa', 'eSewa'),
+        ('khalti', 'Khalti'),  # Optional
+    ]
+    
+    delivery_type = forms.ChoiceField(
+        choices=DELIVERY_CHOICES,
+        initial='delivery',
+        widget=forms.RadioSelect(attrs={
+            'class': 'delivery-type-radio hidden'
+        })
+    )
+    
     delivery_address = forms.CharField(
+        required=False,
         widget=forms.Textarea(attrs={
             'rows': 3,
-            'class': 'w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-amber-500',
-            'placeholder': 'Enter your complete delivery address'
-        }),
-        required=True
+            'class': 'w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500',
+            'placeholder': 'Enter your complete address...'
+        })
     )
     
     phone_number = forms.CharField(
+        max_length=15,
         widget=forms.TextInput(attrs={
-            'class': 'w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-amber-500',
+            'class': 'w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500',
             'placeholder': 'Enter your phone number'
-        }),
-        required=True
+        })
     )
     
     special_instructions = forms.CharField(
+        required=False,
         widget=forms.Textarea(attrs={
-            'rows': 3,
-            'class': 'w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-amber-500',
-            'placeholder': 'Any special instructions for your order...'
-        }),
-        required=False
+            'rows': 2,
+            'class': 'w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500',
+            'placeholder': 'Any special instructions?'
+        })
     )
-    
-    # FIX: Change to use RadioSelect widget with proper rendering
-    PAYMENT_CHOICES = [
-        ('cod', 'Cash on Delivery (COD)'),
-        ('online', 'Pay with eSewa'),
-    ]
     
     payment_method = forms.ChoiceField(
         choices=PAYMENT_CHOICES,
-        widget=forms.RadioSelect(),
         initial='cod',
-        required=True
+        widget=forms.RadioSelect(attrs={
+            'class': 'payment-method-radio hidden'
+        })
     )
     
-    class Meta:
-        model = Order
-        fields = ['delivery_address', 'phone_number', 'special_instructions', 'payment_method']
-    
-    def clean_phone_number(self):
-        phone_number = self.cleaned_data.get('phone_number')
-        # Remove any non-digit characters
-        phone_number = ''.join(filter(str.isdigit, phone_number))
+    def clean(self):
+        cleaned_data = super().clean()
+        delivery_type = cleaned_data.get('delivery_type')
+        delivery_address = cleaned_data.get('delivery_address')
         
-        # Nepal phone number validation (adjust for your country)
-        if len(phone_number) != 10:
-            raise forms.ValidationError("Please enter a valid 10-digit phone number")
+        # If delivery type is 'delivery', address is required
+        if delivery_type == 'delivery' and not delivery_address:
+            self.add_error('delivery_address', 'Delivery address is required for home delivery.')
         
-        # Check if it starts with valid Nepal prefixes
-        valid_prefixes = ['98', '97', '96', '95']
-        if not any(phone_number.startswith(prefix) for prefix in valid_prefixes):
-            raise forms.ValidationError("Please enter a valid Nepal mobile number")
-        
-        return phone_number
-    
-    def clean_delivery_address(self):
-        address = self.cleaned_data.get('delivery_address')
-        if len(address.strip()) < 10:
-            raise forms.ValidationError("Please provide a more detailed delivery address")
-        return address
-
+        return cleaned_data
 
 class CakeCustomizationForm(forms.Form):
     # Tier choices

@@ -302,7 +302,7 @@
                             </div>
                         </div>
 
-                        <!-- Payment Info -->
+                        <!-- Payment Info - UPDATED FIX -->
                         <div class="pt-4 border-t border-gray-200">
                             <h3 class="font-semibold text-gray-800 mb-2">Payment Information</h3>
                             <div class="space-y-2">
@@ -313,13 +313,48 @@
                                 <p class="text-sm">
                                     <span class="text-gray-600">Status:</span>
                                     <span class="ml-2">
-                                        {% if order.payment_status %}
+                                        {% if order.payment_status == 'paid' or order.payment_status == True %}
                                         <span class="text-green-600 font-medium">✓ Paid</span>
+                                        {% elif order.payment_status == 'failed' or order.payment_status == 'cancelled' %}
+                                        <span class="text-red-600 font-medium">✗ Failed/Cancelled</span>
+                                        {% elif order.payment_status == 'pending' or order.payment_status == False %}
+                                        <span class="text-yellow-600 font-medium">⏳ Pending</span>
                                         {% else %}
-                                        <span class="text-yellow-600 font-medium">Pending</span>
+                                        <span class="text-gray-600 font-medium">
+                                            {% if order.payment_status %}
+                                            {{ order.payment_status|title }}
+                                            {% else %}
+                                            Pending
+                                            {% endif %}
+                                        </span>
                                         {% endif %}
                                     </span>
                                 </p>
+                                
+                                <!-- Show payment reference if available -->
+                                {% with latest_payment=order.payment_transactions.first %}
+                                    {% if latest_payment and latest_payment.reference_id %}
+                                    <p class="text-sm">
+                                        <span class="text-gray-600">Reference ID:</span>
+                                        <span class="font-medium ml-2">{{ latest_payment.reference_id }}</span>
+                                    </p>
+                                    {% endif %}
+                                {% endwith %}
+                                
+                                <!-- Show payment failure message -->
+                                {% if order.payment_status == 'failed' or order.payment_status == 'cancelled' or order.payment_status == False %}
+                                <div class="mt-2 p-2 bg-red-50 rounded border border-red-200">
+                                    <p class="text-xs text-red-700">
+                                        Payment was cancelled or failed. You can try again or contact support.
+                                    </p>
+                                    {% if order.status == 'pending' and order.payment_method == 'esewa' %}
+                                    <a href="{% url 'payment:esewa' %}?order_id={{ order.id }}" 
+                                       class="mt-1 inline-block text-xs text-blue-600 hover:text-blue-800">
+                                        Retry eSewa Payment →
+                                    </a>
+                                    {% endif %}
+                                </div>
+                                {% endif %}
                             </div>
                         </div>
 
@@ -360,6 +395,14 @@
                                         Cancel Order
                                     </button>
                                 </form>
+                                {% endif %}
+                                
+                                <!-- Show payment button if payment is pending/failed -->
+                                {% if order.status == 'pending' and order.payment_method == 'esewa' and order.payment_status != 'paid' %}
+                                <a href="{% url 'payment:esewa' %}?order_id={{ order.id }}" 
+                                   class="block w-full text-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 font-medium transition duration-200">
+                                    Pay with eSewa
+                                </a>
                                 {% endif %}
                                 
                                 {% if order.status == 'completed' %}
@@ -433,6 +476,28 @@ document.addEventListener('DOMContentLoaded', function() {
             step.classList.add('active');
         }
     });
+    
+    // Auto-refresh page if payment is pending and order is pending
+    // This helps show updated status after eSewa callback
+    if ('{{ order.status }}' === 'pending' && '{{ order.payment_status }}' === 'pending') {
+        setTimeout(function() {
+            fetch(window.location.href)
+                .then(response => response.text())
+                .then(html => {
+                    // Check if status changed by parsing the new HTML
+                    const parser = new DOMParser();
+                    const newDoc = parser.parseFromString(html, 'text/html');
+                    const paymentStatusElement = newDoc.querySelector('[data-payment-status]');
+                    
+                    if (paymentStatusElement) {
+                        const newStatus = paymentStatusElement.dataset.paymentStatus;
+                        if (newStatus !== 'pending') {
+                            location.reload();
+                        }
+                    }
+                });
+        }, 5000); // Check after 5 seconds
+    }
 });
 </script>
 {% endblock %}

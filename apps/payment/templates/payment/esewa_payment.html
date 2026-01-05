@@ -1,0 +1,60 @@
+{% extends 'payment/payment_base.html' %}
+{% load static %}
+
+{% block title %}Complete Payment with eSewa - Live Bakery{% endblock %}
+
+{% block content %}
+<div class="payment-container">
+    <div class="bg-white rounded-lg shadow-lg p-6">
+        <div class="text-center mb-6">
+            <h1 class="text-2xl font-bold text-gray-800 mb-2">Complete Payment with eSewa</h1>
+            <p class="text-gray-600">Order #{{ data.transaction_uuid }}</p>
+        </div>
+        
+        <!-- Rest of your existing template content remains the same -->
+        <div class="mb-6 p-4 bg-gray-50 rounded-lg">
+            <div class="flex justify-between pt-2 border-t border-gray-300">
+                <span class="text-lg font-bold text-gray-800">Total:</span>
+                <span class="text-lg font-bold text-[#8f3232]">Rs. {{ data.total_amount }}</span>
+            </div>
+        </div>
+        
+        <form action="https://rc-epay.esewa.com.np/api/epay/main/v2/form" method="POST" id="esewaForm">
+            <input type="hidden" id="amount" name="amount" value="{{data.amount}}" required>
+            <input type="hidden" id="tax_amount" name="tax_amount" value="0" required>
+            <input type="hidden" id="total_amount" name="total_amount" value="{{data.total_amount}}" required>
+            <input type="hidden" id="transaction_uuid" name="transaction_uuid" value="{{data.transaction_uuid}}" required>
+            <input type="hidden" id="product_code" name="product_code" value="EPAYTEST" required>
+            <input type="hidden" id="product_service_charge" name="product_service_charge" value="0" required>
+            <input type="hidden" id="product_delivery_charge" name="product_delivery_charge" value="0" required>
+            <input type="hidden" id="success_url" name="success_url"
+             value="{{ request.scheme }}://{{ request.get_host }}{% url 'orders:order_confirmation' order.id %}?payment=success" required>
+            <input type="hidden" id="failure_url" name="failure_url" 
+             value="{{ request.scheme }}://{{ request.get_host }}{% url 'orders:order_detail' order.id %}?payment=failed" required>
+            <input type="hidden" id="signed_field_names" name="signed_field_names" value="total_amount,transaction_uuid,product_code" required>
+            <input type="hidden" id="signature" name="signature" value="{{data.signature}}" required>
+            
+            <div class="text-center">
+                <p class="text-sm text-gray-600 mb-4">
+                    You will be redirected to eSewa's secure payment page.
+                </p>
+                <button type="submit" class="payment-button">
+                    Pay with eSewa
+                </button>
+                <a href="{% url 'orders:order_detail' order.id %}" class="block mt-4 text-gray-600 hover:text-gray-800 text-sm">
+                    ← Back to Order Details
+                </a>
+            </div>
+        </form>
+        
+        <div class="mt-6 pt-6 border-t border-gray-200">
+            <div class="flex items-center justify-center text-gray-500 text-sm">
+                <svg class="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                    <path fill-rule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clip-rule="evenodd"/>
+                </svg>
+                Secure Payment by eSewa
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

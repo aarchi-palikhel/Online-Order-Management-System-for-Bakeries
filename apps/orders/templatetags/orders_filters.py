@@ -52,3 +52,28 @@ def index(indexable, i):
         return indexable[i]
     except (IndexError, TypeError, KeyError):
         return ''
+    
+# Add to orders_filters.py
+@register.filter(name='payment_status_class')
+def payment_status_class(payment_status):
+    """Return CSS class for payment status badge"""
+    if payment_status in ['paid', True]:
+        return 'bg-green-100 text-green-800'
+    elif payment_status in ['failed', 'cancelled']:
+        return 'bg-red-100 text-red-800'
+    elif payment_status in ['pending', False]:
+        return 'bg-yellow-100 text-yellow-800'
+    else:
+        return 'bg-gray-100 text-gray-800'
+
+@register.filter(name='payment_status_display')
+def payment_status_display(payment_status):
+    """Return display text for payment status"""
+    if payment_status in ['paid', True]:
+        return 'Paid'
+    elif payment_status in ['failed', 'cancelled']:
+        return 'Failed'
+    elif payment_status in ['pending', False]:
+        return 'Pending'
+    else:
+        return str(payment_status).title() if payment_status else 'Pending'

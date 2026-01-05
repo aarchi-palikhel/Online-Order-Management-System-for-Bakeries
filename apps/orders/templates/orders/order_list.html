@@ -84,7 +84,6 @@
         </div>
     </div>
 
-    <!-- Rest of your code remains the same -->
     <!-- Order Filters -->
     <div class="bg-white rounded-lg shadow p-4 mb-6">
         <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
@@ -163,10 +162,12 @@
                             <div class="text-sm font-semibold text-gray-900">Rs. {{ order.total_amount }}</div>
                             <div class="text-sm text-gray-500">
                                 {{ order.get_payment_method_display }}
-                                {% if order.payment_status %}
+                                {% if order.payment_status == 'paid' or order.payment_status == True %}
                                 <span class="text-green-600 ml-1">✓ Paid</span>
+                                {% elif order.payment_status == 'failed' or order.payment_status == 'cancelled' %}
+                                <span class="text-red-600 ml-1">✗ Failed</span>
                                 {% else %}
-                                <span class="text-yellow-600 ml-1">Pending</span>
+                                <span class="text-yellow-600 ml-1">⏳ Pending</span>
                                 {% endif %}
                             </div>
                         </td>
@@ -197,7 +198,7 @@
                                 </form>
                                 {% endif %}
                                 {% if order.status == 'completed' %}
-                                <a href="{% url 'orders:order_invoice' order.id %}" 
+                                <a href="{% url 'orders:order_invoice_pdf' order.id %}" 
                                    class="text-blue-600 hover:text-blue-800 font-medium ml-3">
                                     Invoice
                                 </a>

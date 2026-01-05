@@ -1,3 +1,4 @@
+# orders/urls.py 
 from django.urls import path
 from . import views
 
@@ -9,6 +10,7 @@ urlpatterns = [
     
     # Order creation
     path('create/', views.order_create, name='order_create'),
+    path('create-with-payment/', views.create_order_with_payment, name='create_order_with_payment'),
     path('confirmation/<int:order_id>/', views.order_confirmation, name='order_confirmation'),
     
     # Order management
@@ -17,11 +19,12 @@ urlpatterns = [
     path('<int:order_id>/', views.order_detail, name='order_detail'),
     path('<int:order_id>/cancel/', views.order_cancel, name='order_cancel'),
     
-    # Optional routes (uncomment if you create the views)
+    # Optional routes
     path('track/<str:order_number>/', views.order_track, name='order_track'),
-    path('invoice/<int:order_id>/', views.order_invoice, name='order_invoice'),
+    path('invoice/<int:order_id>/', views.order_invoice_pdf, name='order_invoice_pdf'),
     path('status/<int:order_id>/', views.order_status, name='order_status'),
     
-    # Optional: Quick reorder
-    #path('<int:order_id>/reorder/', views.order_reorder, name='order_reorder'),
+    # Payment handling (add these)
+    path('payment-callback/', views.handle_payment_callback, name='payment_callback'),
+    path('payment-status/<int:order_id>/', views.payment_status, name='payment_status'),
 ]

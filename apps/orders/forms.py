@@ -256,22 +256,39 @@ class CakeCustomizationForm(forms.Form):
         reference_image = cleaned_data.get('reference_image')
         reference_title = cleaned_data.get('reference_title')
         
+        print(f"=== DEBUG FORM VALIDATION ===")
+        print(f"Reference image exists: {bool(reference_image)}")
+        print(f"Reference title: {reference_title}")
+        
         # Validate custom weight
         if weight == 'custom' and not custom_weight:
             self.add_error('custom_weight', 'Please specify custom weight')
         
-        # Validate reference image has title if provided
-        if reference_image and not reference_title:
-            self.add_error('reference_title', 'Please provide a title for your reference image')
-        
-        # Validate image size (optional)
+        # Validate image if provided
         if reference_image:
+            # Check file size
             max_size = 5 * 1024 * 1024  # 5MB
             if reference_image.size > max_size:
-                self.add_error('reference_image', 'Image size should not exceed 5MB')
+                size_mb = reference_image.size / (1024 * 1024)
+                self.add_error('reference_image', f'Image size ({size_mb:.1f}MB) exceeds 5MB limit')
+            
+            # Check file type
+            allowed_types = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp']
+            if reference_image.content_type not in allowed_types:
+                self.add_error('reference_image', 'Please upload a valid image file (JPG, PNG, GIF, WebP)')
+            
+            # Set default title if image uploaded but no title provided
+            if not reference_title:
+                # Use the filename as default title
+                filename = reference_image.name
+                # Remove extension and clean up
+                import os
+                name_without_ext = os.path.splitext(filename)[0]
+                cleaned_data['reference_title'] = f"Cake Design: {name_without_ext}"
+                print(f"Set default title: {cleaned_data['reference_title']}")
         
         return cleaned_data
-    
+
     def get_session_data(self):
         """
         Get all form data as JSON-serializable dictionary for session storage.
@@ -342,3 +359,77 @@ class CakeCustomizationForm(forms.Form):
                     data['delivery_date'] = None
         
         return data
+    
+
+class CheckoutCakeCustomizationForm(CakeCustomizationForm):
+    """Form for checkout that handles files differently"""
+    
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Make all reference fields optional
+        self.fields['reference_image'].required = False
+        self.fields['reference_title'].required = False
+        self.fields['reference_description'].required = False
+    
+    def clean(self):
+        cleaned_data = super().clean()
+        weight = cleaned_data.get('weight')
+        custom_weight = cleaned_data.get('custom_weight')
+        reference_image = cleaned_data.get('reference_image')
+        reference_title = cleaned_data.get('reference_title')
+        
+        print(f"=== DEBUG FORM CLEAN ===")
+        print(f"Reference image type: {type(reference_image)}")
+        print(f"Reference image value: {reference_image}")
+        
+        # Validate custom weight
+        if weight == 'custom' and not custom_weight:
+            self.add_error('custom_weight', 'Please specify custom weight')
+        
+        # CRITICAL FIX: Check if reference_image is actually a file object
+        # If it's a string (filename from session), skip validation
+        if reference_image and hasattr(reference_image, 'size'):
+            # It's a file object - validate it
+            max_size = 5 * 1024 * 1024  # 5MB
+            if reference_image.size > max_size:
+                size_mb = reference_image.size / (1024 * 1024)
+                self.add_error('reference_image', f'Image size ({size_mb:.1f}MB) exceeds 5MB limit')
+            
+            # Check file type
+            allowed_types = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp']
+            if reference_image.content_type not in allowed_types:
+                self.add_error('reference_image', 'Please upload a valid image file (JPG, PNG, GIF, WebP)')
+        
+        # Don't validate if reference_image is a string (from session)
+        # It means it was already validated during initial customization
+        
+        # Also, don't require title even if image is provided
+        # This makes it truly optional
+        
+        return cleaned_data
+    
+    def clean_reference_image(self):
+        """Clean reference_image field - handle both file objects and strings"""
+        reference_image = self.cleaned_data.get('reference_image')
+        
+        # If it's a string (from session), return it as is
+        if isinstance(reference_image, str):
+            print(f"DEBUG: reference_image is a string from session: {reference_image}")
+            return reference_image
+        
+        # If it's None (not provided), return None
+        if reference_image is None:
+            return None
+        
+        # If it's a file object, validate it
+        if hasattr(reference_image, 'size'):
+            max_size = 5 * 1024 * 1024  # 5MB
+            if reference_image.size > max_size:
+                size_mb = reference_image.size / (1024 * 1024)
+                raise forms.ValidationError(f'Image size ({size_mb:.1f}MB) exceeds 5MB limit')
+            
+            allowed_types = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp']
+            if reference_image.content_type not in allowed_types:
+                raise forms.ValidationError('Please upload a valid image file (JPG, PNG, GIF, WebP)')
+        
+        return reference_image

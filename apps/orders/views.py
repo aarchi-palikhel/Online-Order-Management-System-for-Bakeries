@@ -12,7 +12,7 @@ from datetime import timedelta
 from cart.models import Cart, CartItem
 from products.models import Product
 from .models import Order, OrderItem, CakeDesignReference
-from .forms import OrderCreateForm, CakeCustomizationForm
+from .forms import OrderCreateForm, CakeCustomizationForm, CheckoutCakeCustomizationForm
 from users.decoraters import customer_required
 from django_esewa import EsewaPayment
 import uuid
@@ -156,7 +156,6 @@ def calculate_delivery_fee(address):
     # Outside Bhaktapur (Rs. 100)
     return 100
 
-
 @customer_required
 def customize_cake(request, product_id):
     """Customize a cake before adding to cart"""
@@ -167,16 +166,26 @@ def customize_cake(request, product_id):
         return redirect('products:product_detail', product_id=product_id)
     
     if request.method == 'POST':
+        print("=== DEBUG: FORM SUBMISSION ===")
+        print(f"POST data: {dict(request.POST)}")
+        print(f"FILES data: {dict(request.FILES)}")
+        
         form = CakeCustomizationForm(
             request.POST, 
             request.FILES,
             product=product
         )
         
+        print(f"Form is valid: {form.is_valid()}")
+        if not form.is_valid():
+            print(f"Form errors: {form.errors}")
+            print(f"Form non-field errors: {form.non_field_errors()}")
+        
         if form.is_valid():
             try:
                 # Get the session-safe data from form
                 session_data = form.get_session_data()
+                print(f"Session data prepared: {session_data}")
                 
                 if session_data:
                     # Store in session with product_id as key
@@ -184,26 +193,30 @@ def customize_cake(request, product_id):
                     
                     # Store reference image info if uploaded
                     if form.cleaned_data.get('reference_image'):
+                        print(f"Reference image uploaded: {form.cleaned_data['reference_image'].name}")
                         request.session[f'cake_reference_{product_id}'] = {
                             'image_name': form.cleaned_data['reference_image'].name,
-                            'title': form.cleaned_data.get('reference_title'),
-                            'description': form.cleaned_data.get('reference_description'),
+                            'title': form.cleaned_data.get('reference_title', ''),
+                            'description': form.cleaned_data.get('reference_description', ''),
                         }
                     
                     # Add to cart with customization
                     return add_customized_cake_to_cart(request, product_id, form)
                 else:
                     messages.error(request, "Failed to save customization data.")
+                    print("ERROR: session_data is None")
                     
             except Exception as e:
                 messages.error(request, f"Error saving customization: {str(e)}")
                 print(f"Error in customize_cake: {e}")
+                import traceback
                 traceback.print_exc()
         else:
             messages.error(request, "Please correct the errors below.")
             print("Form errors:", form.errors)
     else:
         form = CakeCustomizationForm(product=product)
+        print(f"Form fields: {list(form.fields.keys())}")
     
     context = {
         'product': product,
@@ -211,7 +224,6 @@ def customize_cake(request, product_id):
     }
     
     return render(request, 'orders/customize_cake.html', context)
-
 
 @customer_required
 def add_customized_cake_to_cart(request, product_id, form):
@@ -289,12 +301,29 @@ def order_create(request):
         order_form = OrderCreateForm(request.POST or None)
         customization_forms = {}
         
+        # DEBUG: Print session data
+        print("=== DEBUG SESSION DATA ===")
+        for key in request.session.keys():
+            if 'cake_customization' in key:
+                print(f"{key}: {request.session[key]}")
+        
         # Check for customization data in session for cake items
         session_customizations = {}
         for cart_item in cake_items:
             customization_key = f'cake_customization_{cart_item.product.id}'
             if customization_key in request.session:
-                session_customizations[cart_item.product.id] = request.session[customization_key]
+                session_data = request.session[customization_key]
+                print(f"DEBUG: Found session data for {cart_item.product.id}: {session_data}")
+                # IMPORTANT: Remove file data from session
+                if 'reference_image' in session_data:
+                    # Create a copy without the file data
+                    cleaned_data = {k: v for k, v in session_data.items() if k != 'reference_image'}
+                    session_customizations[cart_item.product.id] = cleaned_data
+                    print(f"DEBUG: Removed reference_image from session data")
+                else:
+                    session_customizations[cart_item.product.id] = session_data
+            else:
+                print(f"DEBUG: No session data found for {cart_item.product.id}")
         
         # Calculate initial totals
         subtotal = cart.total_price
@@ -315,17 +344,28 @@ def order_create(request):
                 initial_data = None
                 if cart_item.product.id in session_customizations:
                     initial_data = session_customizations[cart_item.product.id]
+                    print(f"DEBUG: Loaded session data for product {cart_item.product.id}: {initial_data}")
                 
-                customization_forms[i] = CakeCustomizationForm(
-                    request.POST, 
+                # Create form
+                form = CakeCustomizationForm(
+                    request.POST,
                     request.FILES,
                     prefix=form_key,
                     product=cart_item.product,
                     initial=initial_data
                 )
+                
+                # Make reference fields optional for checkout
+                form.fields['reference_image'].required = False
+                form.fields['reference_title'].required = False
+                form.fields['reference_description'].required = False
+                
+                customization_forms[i] = form
             
             # Validate order form first
             if order_form.is_valid():
+                print("DEBUG: Order form is valid")
+                
                 # Calculate delivery fee based on address
                 address = order_form.cleaned_data.get('delivery_address', '')
                 delivery_fee = calculate_delivery_fee(address)
@@ -341,6 +381,10 @@ def order_create(request):
                         for field, errors in form.errors.items():
                             for error in errors:
                                 messages.error(request, f"Cake customization error ({cart_item.product.name}): {error}")
+                        print(f"DEBUG: Form for {cart_item.product.name} has errors: {form.errors}")
+                    else:
+                        print(f"DEBUG: Form for {cart_item.product.name} is valid")
+                        print(f"DEBUG: Form cleaned data keys: {list(form.cleaned_data.keys())}")
                 
                 if all_valid:
                     try:
@@ -388,8 +432,6 @@ def order_create(request):
                                     cake_form = customization_forms[i]
                                     
                                     # Get customization data
-                                    flavor = cake_form.cleaned_data.get('flavor', 'vanilla')
-                                    custom_flavor = cake_form.cleaned_data.get('custom_flavor', '')
                                     weight = cake_form.cleaned_data.get('weight', '1')
                                     custom_weight = cake_form.cleaned_data.get('custom_weight', '')
                                     tiers = int(cake_form.cleaned_data.get('tiers', 1))
@@ -397,6 +439,14 @@ def order_create(request):
                                     delivery_date = cake_form.cleaned_data.get('delivery_date')
                                     cake_special_instructions = cake_form.cleaned_data.get('special_instructions', '')
                                     quantity = cake_form.cleaned_data.get('quantity', cart_item.quantity)
+                                    
+                                    # Get reference image data - may be None if not re-uploaded
+                                    reference_image = cake_form.cleaned_data.get('reference_image')
+                                    reference_title = cake_form.cleaned_data.get('reference_title', '')
+                                    reference_description = cake_form.cleaned_data.get('reference_description', '')
+                                    
+                                    print(f"DEBUG: Processing cake order item - Has reference image: {bool(reference_image)}")
+                                    print(f"DEBUG: Reference image type: {type(reference_image)}")
                                     
                                     # Calculate price with tier multiplier
                                     base_price = cart_item.product.base_price
@@ -418,8 +468,6 @@ def order_create(request):
                                         price=final_price,
                                         
                                         # Cake customization fields
-                                        cake_flavor=flavor,
-                                        cake_custom_flavor=custom_flavor,
                                         cake_weight=weight,
                                         cake_custom_weight=custom_weight,
                                         cake_tiers=tiers,
@@ -430,10 +478,18 @@ def order_create(request):
                                     
                                     print(f"DEBUG: Order item created with ID {order_item.id}")
                                     
-                                    # Save design reference if image uploaded
-                                    if hasattr(cake_form, 'save_design_reference'):
+                                    # Save design reference if NEW image uploaded
+                                    if reference_image and hasattr(reference_image, 'size'):  # Check if it's a file object
                                         try:
-                                            cake_form.save_design_reference(order_item)
+                                            design_reference = CakeDesignReference(
+                                                order=order,
+                                                order_item=order_item,
+                                                image=reference_image,
+                                                title=reference_title or f"Design for {order_item.product.name}",
+                                                description=reference_description or f"Custom cake order",
+                                            )
+                                            design_reference.save()
+                                            print(f"DEBUG: Design reference saved for order item {order_item.id}")
                                         except Exception as e:
                                             print(f"Error saving design reference: {e}")
                                             # Don't fail the whole order if design reference fails
@@ -442,6 +498,7 @@ def order_create(request):
                                     session_key = f'cake_customization_{cart_item.product.id}'
                                     if session_key in request.session:
                                         del request.session[session_key]
+                                        print(f"DEBUG: Removed {session_key} from session")
                                     
                                 else:
                                     # Handle regular items
@@ -466,11 +523,11 @@ def order_create(request):
                             
                             # Redirect based on payment method
                             if payment_method == 'esewa':
-                                # Create payment transaction for eSewa - FIXED
+                                # Create payment transaction for eSewa
                                 try:
                                     payment = PaymentTransaction.objects.create(
                                         user=request.user,
-                                        order=order,  # Just pass the order object
+                                        order=order,
                                         amount=order.total_amount,
                                         total_amount=order.total_amount,
                                         tax_amount=0,
@@ -497,17 +554,20 @@ def order_create(request):
                             
                     except Exception as e:
                         print(f"Error creating order: {str(e)}")
+                        import traceback
                         traceback.print_exc()
                         messages.error(request, f"❌ Error creating order: {str(e)}")
                         return redirect('cart:cart_detail')
                 else:
                     # Form validation failed
                     messages.error(request, "Please correct the errors below.")
+                    print("DEBUG: Cake form validation failed")
             else:
                 # Order form validation failed
                 for field, errors in order_form.errors.items():
                     for error in errors:
                         messages.error(request, f"{field}: {error}")
+                print(f"DEBUG: Order form errors: {order_form.errors}")
         
         # For GET request or invalid POST, initialize forms
         for i, cart_item in enumerate(cake_items):
@@ -517,12 +577,21 @@ def order_create(request):
             initial_data = None
             if cart_item.product.id in session_customizations:
                 initial_data = session_customizations[cart_item.product.id]
+                print(f"DEBUG: Loaded session data for product {cart_item.product.id} (GET): {initial_data}")
             
-            customization_forms[i] = CakeCustomizationForm(
+            # Create form
+            form = CakeCustomizationForm(
                 prefix=form_key,
                 product=cart_item.product,
                 initial=initial_data
             )
+            
+            # Make reference fields optional for checkout
+            form.fields['reference_image'].required = False
+            form.fields['reference_title'].required = False
+            form.fields['reference_description'].required = False
+            
+            customization_forms[i] = form
         
         # Recalculate totals for display
         if request.method == 'POST':
@@ -550,10 +619,11 @@ def order_create(request):
         
     except Exception as e:
         print(f"Error in order_create: {str(e)}")
+        import traceback
         traceback.print_exc()
         messages.error(request, f"❌ An error occurred: {str(e)}")
         return redirect('cart:cart_detail')
-
+          
 @customer_required
 def order_confirmation(request, order_id):
     """Show order confirmation for both COD and eSewa payments"""

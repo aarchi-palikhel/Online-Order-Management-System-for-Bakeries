@@ -4,12 +4,15 @@ from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
 from django.contrib import messages
 from .forms import CustomerCreationForm, CustomAuthenticationForm
+from .decoraters import customer_required, staff_required, owner_required, staff_or_owner_required
 
 def register(request):
-    # If user is already logged in, redirect them appropriately
     if request.user.is_authenticated:
-        if hasattr(request.user, 'is_admin_user') and request.user.is_admin_user():
-            messages.info(request, "You are already logged in as admin.")
+        if request.user.user_type == 'owner':
+            messages.info(request, "You are already logged in as owner.")
+            return redirect('admin:index')
+        elif request.user.user_type == 'staff':
+            messages.info(request, "You are already logged in as staff.")
             return redirect('admin:index')
         else:
             messages.info(request, "You are already logged in.")
@@ -27,10 +30,12 @@ def register(request):
     return render(request, 'users/register.html', {'form': form})
 
 def custom_login(request):
-    # If user is already logged in, redirect them appropriately
     if request.user.is_authenticated:
-        if hasattr(request.user, 'is_admin_user') and request.user.is_admin_user():
-            messages.info(request, "You are already logged in as admin.")
+        if request.user.user_type == 'owner' or request.user.is_superuser:
+            messages.info(request, "You are already logged in as owner/superuser.")
+            return redirect('admin:index')
+        elif request.user.user_type == 'staff':
+            messages.info(request, "You are already logged in as staff.")
             return redirect('admin:index')
         else:
             messages.info(request, "You are already logged in.")
@@ -44,10 +49,13 @@ def custom_login(request):
             user = authenticate(username=username, password=password)
             if user is not None:
                 login(request, user)
-                # Check if user is staff (admin) or customer
-                if user.is_staff or (hasattr(user, 'is_admin_user') and user.is_admin_user()):
-                    messages.info(request, f"Welcome back, Admin {user.username}!")
-                    return redirect('admin:index')  # Redirect admin to admin panel
+                # Check user type and redirect accordingly
+                if user.user_type == 'owner' or user.is_superuser:
+                    messages.info(request, f"Welcome back, Owner/Superuser {user.username}!")
+                    return redirect('admin:index')
+                elif user.user_type == 'staff':
+                    messages.info(request, f"Welcome back, Staff {user.username}!")
+                    return redirect('admin:index')
                 else:
                     messages.success(request, f"Welcome back, {user.username}!")
                     return redirect('core:home')
@@ -65,12 +73,8 @@ def custom_logout(request):
     return redirect('core:home')
 
 @login_required
+@customer_required
 def profile(request):
-    # If admin tries to access customer profile, redirect them to admin
-    if request.user.is_staff or (hasattr(request.user, 'is_admin_user') and request.user.is_admin_user()):
-        messages.warning(request, "Admins should use the admin panel.")
-        return redirect('admin:index')
-    
     context = {
         'user': request.user,
         'is_customer': True
@@ -78,12 +82,8 @@ def profile(request):
     return render(request, 'users/profile.html', context)
 
 @login_required
+@customer_required
 def user_orders(request):
-    # Only customers should access this page
-    if request.user.is_staff or (hasattr(request.user, 'is_admin_user') and request.user.is_admin_user()):
-        messages.warning(request, "This page is for customers only. Please use the admin panel.")
-        return redirect('admin:index')
-    
     from orders.models import Order
     orders_list = Order.objects.filter(user=request.user).order_by('-created_at')
     

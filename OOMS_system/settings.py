@@ -11,6 +11,9 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 """
 import os , sys
 from pathlib import Path
+from django.urls import reverse_lazy
+from django.utils.translation import gettext_lazy as _
+from django.templatetags.static import static
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -33,6 +36,8 @@ ALLOWED_HOSTS = []
 # Application definition
 
 INSTALLED_APPS = [
+    'unfold',
+    'unfold.contrib.import_export',
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
@@ -51,6 +56,7 @@ INSTALLED_APPS = [
     'theme',
     'django_browser_reload',
     'django_esewa',
+    'import_export',
 ]
 
 # Tailwind Configuration 
@@ -58,6 +64,17 @@ TAILWIND_APP_NAME = 'theme'
 INTERNAL_IPS = ['127.0.0.1']
 NPM_BIN_PATH = "C:/Program Files/nodejs/npm.cmd"
 
+#unfold Configuration
+UNFOLD = {
+    "SITE_TITLE": "Live Bakery Admin",
+    "SITE_HEADER": "Live Bakery Admin",
+    "SITE_SUBHEADER": "Kamalbinayak, Bhaktapur",
+    'DASHBOARD_CALLBACK': 'core.views.dashboard_callback',
+     "SIDEBAR": {
+        "show_search": True,
+        "show_all_applications": True,
+    },
+}
 
 # Authentication Settings
 LOGIN_REDIRECT_URL = 'core:home'      
@@ -83,7 +100,7 @@ ROOT_URLCONF = 'OOMS_system.urls'
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [],
+        'DIRS': [BASE_DIR / 'templates'],
         'APP_DIRS': True,
         'OPTIONS': {
             'context_processors': [

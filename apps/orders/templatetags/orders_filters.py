@@ -2,6 +2,12 @@ from django import template
 
 register = template.Library()
 
+
+@register.filter
+def get_dict_item(dictionary, key):
+    """Get item from dictionary by key in template"""
+    return dictionary.get(key, None)
+
 @register.filter(name='filter_by_status')
 def filter_by_status(orders, status):
     """Filter orders by status"""

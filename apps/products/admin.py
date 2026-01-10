@@ -2,6 +2,7 @@
 from django.contrib import admin
 from django.utils.html import format_html
 from .models import Category, Product, ProductImage, ProductDescription
+from unfold.admin import ModelAdmin
 
 class ProductImageInline(admin.TabularInline):
     model = ProductImage
@@ -17,7 +18,7 @@ class ProductImageInline(admin.TabularInline):
 
 
 @admin.register(Category)
-class CategoryAdmin(admin.ModelAdmin):
+class CategoryAdmin(ModelAdmin):
     list_display = ['name', 'slug', 'display_image', 'product_count', 'created_at']
     list_filter = ['created_at', 'updated_at']
     search_fields = ['name', 'description']
@@ -53,7 +54,7 @@ class CategoryAdmin(admin.ModelAdmin):
     product_count.short_description = "Products"
 
 @admin.register(Product)
-class ProductAdmin(admin.ModelAdmin):
+class ProductAdmin(ModelAdmin):
     list_display = ['name', 'category', 'display_price', 'display_image', 'available', 'is_featured', 'is_cake', 'in_stock', 'created_at']
     list_filter = ['category', 'available', 'is_featured', 'is_cake', 'in_stock', 'created_at']
     search_fields = ['name', 'short_description', 'description', 'category__name']
@@ -106,7 +107,7 @@ class ProductAdmin(admin.ModelAdmin):
     preview_image.short_description = "Image Preview"
 
 @admin.register(ProductImage)
-class ProductImageAdmin(admin.ModelAdmin):
+class ProductImageAdmin(ModelAdmin):
     list_display = ['product', 'preview_image', 'alt_text', 'is_default', 'display_order', 'created_at']
     list_filter = ['is_default', 'created_at']
     search_fields = ['product__name', 'alt_text']
@@ -126,7 +127,7 @@ class ProductImageAdmin(admin.ModelAdmin):
     preview_image_large.short_description = "Large Preview"
 
 @admin.register(ProductDescription)
-class ProductDescriptionAdmin(admin.ModelAdmin):
+class ProductDescriptionAdmin(ModelAdmin):
     list_display = ['product', 'created_at', 'updated_at']
     list_filter = ['created_at', 'updated_at']
     search_fields = ['product__name', 'overview', 'ingredients']

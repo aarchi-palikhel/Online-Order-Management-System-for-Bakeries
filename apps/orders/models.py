@@ -1,6 +1,8 @@
 import uuid
 from django.db import models
 from django.conf import settings
+from django.db.models import Sum, Count, Avg
+from django.utils import timezone
 from products.models import Product
 from cart.models import Cart
 
@@ -173,6 +175,11 @@ class Order(models.Model):
         self.save(update_fields=['subtotal', 'delivery_fee', 'total_amount'])
         
         return self.subtotal, self.delivery_fee, self.total_amount
+    
+    @property
+    def total_price(self):
+        """Alias for total_amount for compatibility"""
+        return self.total_amount
 
 
 class OrderItem(models.Model):
@@ -214,6 +221,11 @@ class OrderItem(models.Model):
     
     def get_total_price(self):
         return self.price * self.quantity
+    
+    @property
+    def total_price(self):
+        """Property alias for get_total_price() for compatibility"""
+        return self.get_total_price()
     
     @property
     def is_cake(self):
@@ -316,3 +328,180 @@ class CakeDesignReference(models.Model):
         if self.order_item:
             return f"{self.order_item.product.name} (Qty: {self.order_item.quantity})"
         return "No product associated"
+
+
+class SuccessfulOrders:
+    """
+    A utility class for calculating revenue and statistics from successful orders
+    (orders with payment_status = 'paid' AND status in ['confirmed', 'completed', 'baking'])
+    """
+    
+    @classmethod
+    def get_successful_orders(cls, start_date=None, end_date=None):
+        """
+        Get all successful orders 
+        (payment_status = 'paid' AND status in ['confirmed', 'completed', 'baking'])
+        """
+        queryset = Order.objects.filter(
+            payment_status='paid',
+            status__in=['confirmed', 'completed', 'baking']
+        )
+        
+        if start_date:
+            queryset = queryset.filter(created_at__gte=start_date)
+        if end_date:
+            # Add one day to include the end date fully
+            end_date = end_date.replace(hour=23, minute=59, second=59)
+            queryset = queryset.filter(created_at__lte=end_date)
+            
+        return queryset
+    
+    @classmethod
+    def calculate_total_revenue(cls, start_date=None, end_date=None):
+        """
+        Calculate total revenue from successful orders
+        """
+        successful_orders = cls.get_successful_orders(start_date, end_date)
+        total = successful_orders.aggregate(total_revenue=Sum('total_amount'))
+        return total['total_revenue'] or 0
+    
+    @classmethod
+    def calculate_average_order_value(cls, start_date=None, end_date=None):
+        """
+        Calculate average order value from successful orders
+        """
+        successful_orders = cls.get_successful_orders(start_date, end_date)
+        result = successful_orders.aggregate(
+            avg_value=Avg('total_amount'),
+            count=Count('id')
+        )
+        
+        if result['count'] > 0:
+            return result['avg_value'] or 0
+        return 0
+    
+    @classmethod
+    def get_order_count(cls, start_date=None, end_date=None):
+        """
+        Get count of successful orders
+        """
+        successful_orders = cls.get_successful_orders(start_date, end_date)
+        return successful_orders.count()
+    
+    @classmethod
+    def get_revenue_by_date_range(cls, days=30):
+        """
+        Get revenue breakdown by date for the last N days
+        """
+        end_date = timezone.now()
+        start_date = end_date - timezone.timedelta(days=days)
+        
+        # Get daily revenue
+        orders = cls.get_successful_orders(start_date, end_date)
+        daily_revenue = {}
+        
+        for order in orders:
+            date_str = order.created_at.strftime('%Y-%m-%d')
+            if date_str not in daily_revenue:
+                daily_revenue[date_str] = 0
+            daily_revenue[date_str] += float(order.total_amount)
+        
+        return daily_revenue
+    
+    @classmethod
+    def get_top_products(cls, start_date=None, end_date=None, limit=10):
+        """
+        Get top selling products from successful orders
+        """
+        successful_orders = cls.get_successful_orders(start_date, end_date)
+        
+        # Get order items from successful orders
+        order_items = OrderItem.objects.filter(
+            order__in=successful_orders
+        ).select_related('product')
+        
+        # Aggregate product sales
+        product_sales = {}
+        
+        for item in order_items:
+            product_id = item.product.id
+            product_name = item.product.name
+            
+            if product_id not in product_sales:
+                product_sales[product_id] = {
+                    'name': product_name,
+                    'quantity_sold': 0,
+                    'revenue': 0,
+                    'orders': set()
+                }
+            
+            product_sales[product_id]['quantity_sold'] += item.quantity
+            product_sales[product_id]['revenue'] += float(item.total_price)
+            product_sales[product_id]['orders'].add(item.order_id)
+        
+        # Convert to list and calculate orders count
+        result = []
+        for product_id, data in product_sales.items():
+            result.append({
+                'product_id': product_id,
+                'product_name': data['name'],
+                'quantity_sold': data['quantity_sold'],
+                'revenue': data['revenue'],
+                'orders_count': len(data['orders'])
+            })
+        
+        # Sort by revenue (descending) and limit
+        result.sort(key=lambda x: x['revenue'], reverse=True)
+        return result[:limit]
+    
+    @classmethod
+    def get_summary_report(cls, start_date=None, end_date=None):
+        """
+        Get a comprehensive summary report of successful orders
+        """
+        successful_orders = cls.get_successful_orders(start_date, end_date)
+        
+        if not successful_orders.exists():
+            return {
+                'total_revenue': 0,
+                'order_count': 0,
+                'average_order_value': 0,
+                'total_items_sold': 0,
+                'delivery_types': {'delivery': 0, 'pickup': 0},
+                'payment_methods': {'cod': 0, 'esewa': 0}
+            }
+        
+        # Calculate basic metrics
+        total_revenue = cls.calculate_total_revenue(start_date, end_date)
+        order_count = cls.get_order_count(start_date, end_date)
+        avg_order_value = cls.calculate_average_order_value(start_date, end_date)
+        
+        # Get total items sold
+        order_items = OrderItem.objects.filter(order__in=successful_orders)
+        total_items_sold = order_items.aggregate(total_quantity=Sum('quantity'))
+        total_items_sold = total_items_sold['total_quantity'] or 0
+        
+        # Analyze delivery types
+        delivery_types = successful_orders.values('delivery_type').annotate(
+            count=Count('id')
+        )
+        delivery_type_dict = {item['delivery_type']: item['count'] for item in delivery_types}
+        
+        # Analyze payment methods
+        payment_methods = successful_orders.values('payment_method').annotate(
+            count=Count('id')
+        )
+        payment_method_dict = {item['payment_method']: item['count'] for item in payment_methods}
+        
+        return {
+            'total_revenue': float(total_revenue),
+            'order_count': order_count,
+            'average_order_value': float(avg_order_value),
+            'total_items_sold': total_items_sold,
+            'delivery_types': delivery_type_dict,
+            'payment_methods': payment_method_dict,
+            'date_range': {
+                'start_date': start_date,
+                'end_date': end_date
+            }
+        }

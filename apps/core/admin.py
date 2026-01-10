@@ -1,8 +1,9 @@
 from django.contrib import admin
 from .models import ContactMessage
+from unfold.admin import ModelAdmin
 
 @admin.register(ContactMessage)
-class ContactMessageAdmin(admin.ModelAdmin):
+class ContactMessageAdmin(ModelAdmin):
     list_display = ['full_name', 'email', 'subject', 'status', 'created_at']
     list_filter = ['status', 'subject', 'created_at']
     search_fields = ['first_name', 'last_name', 'email', 'message']

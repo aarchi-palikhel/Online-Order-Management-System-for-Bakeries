@@ -13,19 +13,28 @@ class CustomUserManager(BaseUserManager):
         user.save(using=self._db)
         return user
 
-    def create_superuser(self, username, email, password=None, **extra_fields):
+    def create_superuser(self,username, email, password=None, **extra_fields):
+        """
+        Create and save a SuperUser with the given email and password.
+        Superusers are always Owners.
+        """
         extra_fields.setdefault('is_staff', True)
         extra_fields.setdefault('is_superuser', True)
+        extra_fields.setdefault('user_type', 'owner')  # Superuser = Owner
+        
+        # Ensure is_superuser is True for owners
+        if extra_fields.get('user_type') == 'owner':
+            extra_fields['is_superuser'] = True
+        
         return self.create_user(username, email, password, **extra_fields)
 
 class CustomUser(AbstractUser):
-    # User type choices
     USER_TYPE_CHOICES = (
         ('customer', 'Customer'),
-        ('admin', 'Admin'),
+        ('staff', 'Staff'),
+        ('owner', 'Owner/Superuser'),
     )
     
-    # Phone number field
     phone_regex = RegexValidator(
         regex=r'^\+?1?\d{9,15}$',
         message="Phone number must be entered in the format: '+9779841234567'. Up to 15 digits allowed."
@@ -38,7 +47,6 @@ class CustomUser(AbstractUser):
         blank=True
     )
     
-    # User type field
     user_type = models.CharField(
         _('user type'),
         max_length=10,
@@ -46,14 +54,12 @@ class CustomUser(AbstractUser):
         default='customer'
     )
     
-    # Main address field (simple)
-    address = models.TextField(
-        _('address'),
+    primary_address = models.TextField(
+        _('primary address'),
         blank=True,
-        help_text=_('Primary delivery address')
+        help_text=_('Primary address for staff members')
     )
     
-    # Timestamps
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     
@@ -67,22 +73,53 @@ class CustomUser(AbstractUser):
     def __str__(self):
         return self.username
     
-    def get_full_name(self):
+    def save(self, *args, **kwargs):
         """
-        Return the first_name plus the last_name, with a space in between.
+        Ensure that Owners are always superusers.
         """
-        full_name = f"{self.first_name} {self.last_name}"
-        return full_name.strip()
+        if self.user_type == 'owner':
+            self.is_superuser = True
+            self.is_staff = True
+        
+        # Ensure staff are not superusers
+        if self.user_type == 'staff':
+            self.is_superuser = False
+            self.is_staff = True
+        
+        # Ensure customers are not staff or superusers
+        if self.user_type == 'customer':
+            self.is_superuser = False
+            self.is_staff = False
+        
+        super().save(*args, **kwargs)
     
-    def is_customer_user(self):
-        return not self.is_staff
+    def is_customer(self):
+        return self.user_type == 'customer'
     
-    def is_admin_user(self):
-        return self.is_staff
+    def is_staff_member(self):
+        return self.user_type == 'staff'
+    
+    def is_owner(self):
+        return self.user_type == 'owner'
+    
+    @property
+    def is_staff(self):
+        """
+        Override is_staff property to check user_type.
+        """
+        return self.user_type in ['staff', 'owner']
+    
+    @is_staff.setter
+    def is_staff(self, value):
+        """
+        Prevent setting is_staff directly - it should be controlled by user_type.
+        """
+        pass
 
+# ==================== CUSTOMER CLASS ====================
 class CustomerManager(CustomUserManager):
     def get_queryset(self):
-        return super().get_queryset().filter(is_staff=False)
+        return super().get_queryset().filter(user_type='customer')
 
 class Customer(CustomUser):
     objects = CustomerManager()
@@ -93,121 +130,45 @@ class Customer(CustomUser):
         verbose_name_plural = _('customers')
     
     def save(self, *args, **kwargs):
-        # Ensure customer is never staff or superuser
-        self.is_staff = False
-        self.is_superuser = False
         self.user_type = 'customer'
+        self.is_superuser = False
+        self.is_staff = False
         super().save(*args, **kwargs)
 
-class AdminManager(CustomUserManager):
+# ==================== STAFF CLASS ====================
+class StaffManager(CustomUserManager):
     def get_queryset(self):
-        return super().get_queryset().filter(is_staff=True)
+        return super().get_queryset().filter(user_type='staff')
 
-class Admin(CustomUser):
-    objects = AdminManager()
+class Staff(CustomUser):
+    objects = StaffManager()
     
     class Meta:
         proxy = True
-        verbose_name = _('admin')
-        verbose_name_plural = _('admins')
+        verbose_name = _('staff')
+        verbose_name_plural = _('staff members')
     
     def save(self, *args, **kwargs):
-        # Ensure admin is always staff
+        self.user_type = 'staff'
+        self.is_superuser = False
         self.is_staff = True
-        self.user_type = 'admin'
         super().save(*args, **kwargs)
 
-class Address(models.Model):
-    """
-    Multiple addresses for customers (home, work, etc.)
-    """
-    ADDRESS_TYPES = [
-        ('home', 'Home'),
-        ('work', 'Work'),
-        ('other', 'Other'),
-    ]
-    
-    customer = models.ForeignKey(
-        Customer,
-        on_delete=models.CASCADE,
-        related_name='addresses',
-        null=True,  # Allow null during migration
-        blank=True  # Allow blank during migration
-    )
-    
-    address_type = models.CharField(
-        _('address type'),
-        max_length=10,
-        choices=ADDRESS_TYPES,
-        default='home'
-    )
-    
-    street_address = models.CharField(
-        _('street address'),
-        max_length=255
-    )
-    
-    city = models.CharField(
-        _('city'),
-        max_length=100,
-        default='Bhaktapur'
-    )
-    
-    municipality = models.CharField(
-        _('municipality'),
-        max_length=100,
-        default='Kamalbinayak'
-    )
-    
-    ward_number = models.PositiveSmallIntegerField(
-        _('ward number'),
-        null=True,
-        blank=True
-    )
-    
-    # Nepal-specific address fields
-    tole = models.CharField(
-        _('tole'),
-        max_length=100,
-        blank=True,
-        help_text=_('Neighborhood or area name')
-    )
-    
-    landmark = models.CharField(
-        _('landmark'),
-        max_length=200,
-        blank=True,
-        help_text=_('Nearby landmark for delivery')
-    )
-    
-    is_default = models.BooleanField(
-        _('default address'),
-        default=False,
-        help_text=_('Use this as the default delivery address')
-    )
-    
-    # Timestamps
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
+# ==================== OWNER CLASS (SUPERUSER) ====================
+class OwnerManager(CustomUserManager):
+    def get_queryset(self):
+        return super().get_queryset().filter(user_type='owner')
+
+class Owner(CustomUser):
+    objects = OwnerManager()
     
     class Meta:
-        verbose_name = _('address')
-        verbose_name_plural = _('addresses')
-        ordering = ['-is_default', 'address_type']
+        proxy = True
+        verbose_name = _('owner/superuser')
+        verbose_name_plural = _('owners/superusers')
     
-    def __str__(self):
-        return f"{self.get_address_type_display()} - {self.street_address}, {self.city}"
-    
-    def get_full_address(self):
-        """Return formatted full address"""
-        address_parts = [self.street_address]
-        if self.tole:
-            address_parts.append(self.tole)
-        if self.landmark:
-            address_parts.append(f"Near {self.landmark}")
-        address_parts.extend([self.municipality, self.city])
-        
-        if self.ward_number:
-            address_parts.append(f"Ward {self.ward_number}")
-            
-        return ", ".join(filter(None, address_parts))
+    def save(self, *args, **kwargs):
+        self.user_type = 'owner'
+        self.is_superuser = True
+        self.is_staff = True
+        super().save(*args, **kwargs)

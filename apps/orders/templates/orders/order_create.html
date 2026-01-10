@@ -281,22 +281,44 @@
                                 
                                 <!-- Reference Image -->
                                 <div>
-                                    <label class="block text-sm font-medium text-gray-700 mb-2">Reference Image (Optional)</label>
+                                    <label class="block text-sm font-medium text-gray-700 mb-2">
+                                        Reference Image (Optional - Already uploaded during customization)
+                                    </label>
+                                    
+                                    <!-- Show message if image was already uploaded -->
+                                    {% with session_key='cake_customization_'|add:cake_item.product.id|stringformat:'s' %}
+                                    {% with customization=request.session|get_dict_item:session_key %}
+                                    {% if customization and customization.reference_image %}
+                                    <div class="mb-3 p-2 bg-green-50 border border-green-200 rounded text-sm">
+                                        <div class="flex items-center text-green-700">
+                                            <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                                            </svg>
+                                            <span>Image already uploaded during customization</span>
+                                        </div>
+                                    </div>
+                                    {% endif %}
+                                    {% endwith %}
+                                    {% endwith %}
+                                    
+                                    <div class="text-sm text-gray-500 mb-2">
+                                        You can upload a different image or leave this empty to keep the previously uploaded image.
+                                    </div>
+                                    
                                     {{ form.reference_image }}
                                     <div class="mt-2">
                                         <label class="block text-sm font-medium text-gray-700 mb-1">
-                                            Reference Title
+                                            Reference Title (Optional)
                                         </label>
                                         {{ form.reference_title }}
                                     </div>
                                     <div class="mt-2">
                                         <label class="block text-sm font-medium text-gray-700 mb-1">
-                                            Reference Description
+                                            Reference Description (Optional)
                                         </label>
                                         {{ form.reference_description }}
                                     </div>
                                 </div>
-                                
                                 <!-- Special Instructions -->
                                 <div>
                                     <label class="block text-sm font-medium text-gray-700 mb-2">Special Instructions (Optional)</label>

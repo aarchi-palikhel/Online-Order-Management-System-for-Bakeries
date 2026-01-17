@@ -1,6 +1,4 @@
-// static/js/cart.js - FIXED VERSION WITH SMOOTH ANIMATION
-
-console.log('Cart JS loaded - version 1');
+console.log('Cart JS loaded');
 
 // Listen for cart updates from product_detail.js
 document.addEventListener('cartUpdated', function(event) {
@@ -10,28 +8,10 @@ document.addEventListener('cartUpdated', function(event) {
         if (typeof updateCartCount === 'function') {
             updateCartCount(event.detail.count);
         } else {
-            console.warn('updateCartCount function not available in cart.js');
+            console.log('updateCartCount function not found');
         }
     }
 });
-
-// Simple notification
-function showNotification(message, type = 'success') {
-    const container = document.getElementById('ajax-notifications');
-    if (!container) return;
-    
-    const notification = document.createElement('div');
-    notification.className = `p-4 rounded-lg shadow-lg animate-slide-in-right ${
-        type === 'success' ? 'bg-green-500' : 'bg-red-500'
-    } text-white`;
-    notification.textContent = message;
-    
-    container.appendChild(notification);
-    
-    setTimeout(() => {
-        notification.remove();
-    }, 3000);
-}
 
 // Update cart quantity with smoother animation
 async function updateQuantity(form, change) {
@@ -39,40 +19,52 @@ async function updateQuantity(form, change) {
     if (window.cartIsUpdating) return;
     window.cartIsUpdating = true;
     
-    const quantitySpan = form.querySelector('.quantity-display');
-    const currentQty = parseInt(quantitySpan.textContent);
+    const quantityDisplay = form.querySelector('.quantity-display');
+    const minusBtn = form.querySelector('.quantity-minus');
+    const plusBtn = form.querySelector('.quantity-plus');
+    
+    if (!quantityDisplay) {
+        console.error('Quantity display not found');
+        window.cartIsUpdating = false;
+        return;
+    }
+    
+    const currentQty = parseInt(quantityDisplay.textContent.trim());
+    
+    if (isNaN(currentQty)) {
+        console.error('Could not parse quantity:', quantityDisplay.textContent);
+        window.cartIsUpdating = false;
+        return;
+    }
+    
     const newQty = currentQty + change;
     
+    // Validate quantity range
     if (newQty < 1 || newQty > 20) {
         window.cartIsUpdating = false;
         return;
     }
     
-    // Visual feedback with smooth animation
-    const minusBtn = form.querySelector('.quantity-minus');
-    const plusBtn = form.querySelector('.quantity-plus');
-    
     // Add click animation
-    if (change > 0) {
+    if (change > 0 && plusBtn) {
         plusBtn.style.transform = 'scale(0.95)';
-    } else {
+        setTimeout(() => {
+            plusBtn.style.transform = '';
+        }, 100);
+    } else if (change < 0 && minusBtn) {
         minusBtn.style.transform = 'scale(0.95)';
+        setTimeout(() => {
+            minusBtn.style.transform = '';
+        }, 100);
     }
     
     // Smooth transition for quantity display
-    quantitySpan.style.opacity = '0.5';
-    quantitySpan.style.transform = 'translateY(-2px)';
-    quantitySpan.textContent = newQty;
+    quantityDisplay.style.transition = 'all 0.2s ease';
+    quantityDisplay.style.opacity = '0.5';
     
     setTimeout(() => {
-        quantitySpan.style.opacity = '1';
-        quantitySpan.style.transform = 'translateY(0)';
-    }, 150);
-    
-    // Re-enable button animation
-    setTimeout(() => {
-        if (minusBtn) minusBtn.style.transform = '';
-        if (plusBtn) plusBtn.style.transform = '';
+        quantityDisplay.textContent = newQty;
+        quantityDisplay.style.opacity = '1';
     }, 100);
     
     const formData = new FormData(form);
@@ -91,87 +83,92 @@ async function updateQuantity(form, change) {
         const data = await response.json();
         
         if (data.success) {
-            // Update cart totals with animation
-            if (data.total_price !== undefined) {
-                // Animate price updates
-                const priceElements = document.querySelectorAll('.flex.justify-between span');
-                priceElements.forEach(span => {
-                    if (span.textContent.includes('Rs.')) {
-                        const parent = span.closest('.flex.justify-between');
-                        if (parent) {
-                            const text = parent.textContent;
-                            if (text.includes('Items') || text.includes('Total')) {
-                                // Animate the price change
-                                span.style.opacity = '0.5';
-                                span.style.transform = 'translateY(-2px)';
-                                setTimeout(() => {
-                                    span.textContent = `Rs. ${data.total_price}`;
-                                    span.style.opacity = '1';
-                                    span.style.transform = 'translateY(0)';
-                                }, 50);
-                            }
-                        }
-                    }
-                });
-                
-                // Update item total if provided
-                if (data.item_total !== undefined) {
-                    const itemElement = form.closest('.cart-item');
-                    const itemTotal = itemElement.querySelector('.text-lg.font-bold.text-gray-800');
-                    if (itemTotal) {
-                        itemTotal.style.opacity = '0.5';
-                        itemTotal.style.transform = 'translateY(-2px)';
-                        setTimeout(() => {
-                            itemTotal.textContent = `Rs. ${data.item_total}`;
-                            itemTotal.style.opacity = '1';
-                            itemTotal.style.transform = 'translateY(0)';
-                        }, 50);
-                    }
-                }
-            }
-            
-            // Update navbar cart count
-            if (typeof updateCartCount === 'function' && data.cart_count !== undefined) {
-                updateCartCount(data.cart_count);
-            }
-            
-            showNotification(data.message || 'Cart updated!', 'success');
+            showSuccess(`Quantity updated to ${newQty}`);
+            updateCartTotals(data);
+            updateButtonStates(form, newQty);
         } else {
-            // Revert quantity on error with animation
-            quantitySpan.style.opacity = '0.5';
-            quantitySpan.style.transform = 'translateY(-2px)';
-            setTimeout(() => {
-                quantitySpan.textContent = currentQty;
-                quantitySpan.style.opacity = '1';
-                quantitySpan.style.transform = 'translateY(0)';
-            }, 50);
-            showNotification(data.message || 'Update failed', 'error');
+            showError(data.message || 'Failed to update quantity');
+            // Revert quantity on error
+            quantityDisplay.textContent = currentQty;
+            updateButtonStates(form, currentQty);
         }
     } catch (error) {
         console.error('Error:', error);
-        // Revert quantity on error
-        quantitySpan.style.opacity = '0.5';
-        quantitySpan.style.transform = 'translateY(-2px)';
-        setTimeout(() => {
-            quantitySpan.textContent = currentQty;
-            quantitySpan.style.opacity = '1';
-            quantitySpan.style.transform = 'translateY(0)';
-        }, 50);
-        showNotification('An error occurred', 'error');
+        showError('An error occurred');
+        quantityDisplay.textContent = currentQty;
+        updateButtonStates(form, currentQty);
     } finally {
-        // Update button states
-        if (minusBtn) {
-            minusBtn.disabled = newQty <= 1;
-        }
-        if (plusBtn) {
-            plusBtn.disabled = newQty >= 20;
-        }
         window.cartIsUpdating = false;
+    }
+}
+
+// Update button disabled states
+function updateButtonStates(form, quantity) {
+    const minusBtn = form.querySelector('.quantity-minus');
+    const plusBtn = form.querySelector('.quantity-plus');
+    
+    if (minusBtn) {
+        minusBtn.disabled = quantity <= 1;
+        minusBtn.style.opacity = quantity <= 1 ? '0.5' : '1';
+        minusBtn.style.cursor = quantity <= 1 ? 'not-allowed' : 'pointer';
+    }
+    
+    if (plusBtn) {
+        plusBtn.disabled = quantity >= 20;
+        plusBtn.style.opacity = quantity >= 20 ? '0.5' : '1';
+        plusBtn.style.cursor = quantity >= 20 ? 'not-allowed' : 'pointer';
+    }
+}
+
+// Update cart totals dynamically
+function updateCartTotals(data) {
+    // Update total items count
+    if (data.total_items !== undefined) {
+        const itemsElements = document.querySelectorAll('[data-total-items]');
+        itemsElements.forEach(el => {
+            el.textContent = data.total_items;
+        });
+        
+        // Also update cart badge in navbar if it exists
+        const cartCount = document.getElementById('cart-count');
+        if (cartCount) {
+            cartCount.textContent = data.total_items;
+        }
+    }
+    
+    // Update total price
+    if (data.total_price !== undefined) {
+        const priceElements = document.querySelectorAll('[data-total-price]');
+        priceElements.forEach(el => {
+            el.style.transition = 'all 0.3s ease';
+            el.style.opacity = '0.7';
+            setTimeout(() => {
+                el.textContent = `Rs. ${data.total_price}`;
+                el.style.opacity = '1';
+            }, 150);
+        });
+    }
+    
+    // Update individual item price if provided
+    if (data.item_total_price !== undefined && data.product_id !== undefined) {
+        const itemElement = document.querySelector(`[data-product-id="${data.product_id}"]`);
+        if (itemElement) {
+            const priceEl = itemElement.querySelector('.item-total-price');
+            if (priceEl) {
+                priceEl.style.transition = 'all 0.3s ease';
+                priceEl.style.opacity = '0.7';
+                setTimeout(() => {
+                    priceEl.textContent = `Rs. ${data.item_total_price}`;
+                    priceEl.style.opacity = '1';
+                }, 150);
+            }
+        }
     }
 }
 
 // Remove item with smooth animation
 async function removeItem(form) {
+    const cartItem = form.closest('.cart-item');
     const button = form.querySelector('[type="submit"]');
     const originalHTML = button.innerHTML;
     button.innerHTML = '<span class="animate-spin">⟳</span>';
@@ -190,74 +187,50 @@ async function removeItem(form) {
         const data = await response.json();
         
         if (data.success) {
-            // Smooth remove animation
-            const item = form.closest('.cart-item');
-            item.style.transition = 'all 0.4s cubic-bezier(0.4, 0, 0.2, 1)';
-            item.style.opacity = '0';
-            item.style.transform = 'translateX(-100px)';
-            item.style.maxHeight = item.offsetHeight + 'px';
+            // Smooth fade out animation
+            cartItem.style.opacity = '0';
+            cartItem.style.transform = 'translateX(-20px)';
+            cartItem.style.transition = 'all 0.3s ease';
             
             setTimeout(() => {
-                item.style.maxHeight = '0';
-                item.style.margin = '0';
-                item.style.padding = '0';
-                item.style.overflow = 'hidden';
+                cartItem.remove();
                 
-                setTimeout(() => {
-                    item.remove();
-                    
-                    // Reload if cart is empty
-                    if (document.querySelectorAll('.cart-item').length === 0) {
-                        window.location.reload();
-                    } else if (data.total_price !== undefined) {
-                        // Update remaining totals with animation
-                        const priceElements = document.querySelectorAll('.flex.justify-between span');
-                        priceElements.forEach(span => {
-                            if (span.textContent.includes('Rs.')) {
-                                const parent = span.closest('.flex.justify-between');
-                                if (parent) {
-                                    const text = parent.textContent;
-                                    if (text.includes('Items') || text.includes('Total')) {
-                                        span.style.opacity = '0.5';
-                                        span.style.transform = 'translateY(-2px)';
-                                        setTimeout(() => {
-                                            span.textContent = `Rs. ${data.total_price}`;
-                                            span.style.opacity = '1';
-                                            span.style.transform = 'translateY(0)';
-                                        }, 100);
-                                    }
-                                }
-                            }
-                        });
-                    }
-                    
-                    // Update navbar
-                    if (typeof updateCartCount === 'function' && data.cart_count !== undefined) {
-                        updateCartCount(data.cart_count);
-                    }
-                }, 400);
-            }, 400);
-            
-            showNotification(data.message || 'Item removed', 'success');
+                // Check if this was the last item
+                if (data.total_items === 0) {
+                    // Fade out the cart and show empty state
+                    fadeOutCartShowEmpty();
+                } else {
+                    // Update totals
+                    updateCartTotals(data);
+                    showSuccess('Item removed from cart');
+                }
+            }, 300);
         } else {
-            showNotification(data.message || 'Remove failed', 'error');
+            showError(data.message || 'Failed to remove item');
             button.disabled = false;
             button.innerHTML = originalHTML;
         }
     } catch (error) {
         console.error('Error:', error);
-        showNotification('An error occurred', 'error');
+        showError('An error occurred');
         button.disabled = false;
         button.innerHTML = originalHTML;
     }
 }
 
-// Clear cart
+// Clear cart with smooth animation
 async function clearCart(form) {
     const button = form.querySelector('[type="submit"]');
     const originalText = button.textContent;
     button.textContent = 'Clearing...';
     button.disabled = true;
+    
+    // Show confirmation
+    if (!confirm('Are you sure you want to clear your entire cart?')) {
+        button.textContent = originalText;
+        button.disabled = false;
+        return;
+    }
     
     try {
         const response = await fetch(form.action, {
@@ -272,25 +245,49 @@ async function clearCart(form) {
         const data = await response.json();
         
         if (data.success) {
-            showNotification(data.message || 'Cart cleared', 'success');
-            if (typeof updateCartCount === 'function' && data.cart_count !== undefined) {
-                updateCartCount(data.cart_count);
-            }
-            setTimeout(() => window.location.reload(), 800);
+            // Fade out all cart items
+            const cartItems = document.querySelectorAll('.cart-item');
+            cartItems.forEach((item, index) => {
+                setTimeout(() => {
+                    item.style.opacity = '0';
+                    item.style.transform = 'translateX(-20px)';
+                    item.style.transition = 'all 0.3s ease';
+                }, index * 100);
+            });
+            
+            // Show empty state after animation
+            setTimeout(() => {
+                fadeOutCartShowEmpty();
+            }, cartItems.length * 100 + 300);
         } else {
-            showNotification(data.message || 'Clear failed', 'error');
-            button.disabled = false;
+            showError(data.message || 'Failed to clear cart');
             button.textContent = originalText;
+            button.disabled = false;
         }
     } catch (error) {
         console.error('Error:', error);
-        showNotification('An error occurred', 'error');
-        button.disabled = false;
+        showError('An error occurred');
         button.textContent = originalText;
+        button.disabled = false;
     }
 }
 
-// Setup event listeners - simplified approach
+// Fade out cart and show empty state
+function fadeOutCartShowEmpty() {
+    const cartContainer = document.querySelector('.grid.lg\\:grid-cols-3');
+    
+    if (cartContainer) {
+        cartContainer.style.opacity = '0';
+        cartContainer.style.transition = 'opacity 0.4s ease';
+        
+        setTimeout(() => {
+            // Reload the page to show empty state
+            location.reload();
+        }, 400);
+    }
+}
+
+// Setup event listeners
 function setupCart() {
     console.log('Setting up cart - fresh setup');
     
@@ -298,7 +295,7 @@ function setupCart() {
     document.querySelectorAll('.quantity-minus').forEach(btn => {
         btn.addEventListener('click', function(e) {
             e.preventDefault();
-            if (window.cartIsUpdating) return;
+            e.stopPropagation();
             const form = this.closest('.update-cart-form');
             if (form) {
                 updateQuantity(form, -1);
@@ -309,7 +306,7 @@ function setupCart() {
     document.querySelectorAll('.quantity-plus').forEach(btn => {
         btn.addEventListener('click', function(e) {
             e.preventDefault();
-            if (window.cartIsUpdating) return;
+            e.stopPropagation();
             const form = this.closest('.update-cart-form');
             if (form) {
                 updateQuantity(form, 1);
@@ -326,11 +323,23 @@ function setupCart() {
     });
     
     // Clear cart
-    document.querySelectorAll('#clear-cart-form').forEach(form => {
-        form.addEventListener('submit', function(e) {
+    const clearCartForm = document.getElementById('clear-cart-form');
+    if (clearCartForm) {
+        clearCartForm.addEventListener('submit', function(e) {
             e.preventDefault();
             clearCart(this);
         });
+    }
+    
+    // Initialize button states for all items
+    document.querySelectorAll('.update-cart-form').forEach(form => {
+        const quantityDisplay = form.querySelector('.quantity-display');
+        if (quantityDisplay) {
+            const quantity = parseInt(quantityDisplay.textContent.trim());
+            if (!isNaN(quantity)) {
+                updateButtonStates(form, quantity);
+            }
+        }
     });
 }
 

@@ -30,16 +30,6 @@
         </div>
     </div>
 
-    {% if messages %}
-    <div class="mb-6">
-        {% for message in messages %}
-        <div class="p-4 mb-2 rounded-lg {% if message.tags == 'error' %}bg-red-50 text-red-700{% elif message.tags == 'success' %}bg-green-50 text-green-700{% elif message.tags == 'warning' %}bg-yellow-50 text-yellow-700{% else %}bg-blue-50 text-blue-700{% endif %}">
-            {{ message }}
-        </div>
-        {% endfor %}
-    </div>
-    {% endif %}
-
     <div class="grid lg:grid-cols-3 gap-8">
         <!-- Order Details -->
         <div class="lg:col-span-2 space-y-6">
@@ -422,12 +412,15 @@
                         <!-- Actions -->
                         <div class="pt-4 border-t border-gray-200">
                             <div class="space-y-3">
-                                {% if order.status == 'pending' %}
-                                <form method="post" action="{% url 'orders:order_cancel' order.id %}">
+                                {% if order.status == 'pending' or order.status == 'confirmed' %}
+                                <form method="post" 
+                                      action="{% url 'orders:order_cancel' order.id %}"
+                                      class="cancel-order-form"
+                                      data-order-id="{{ order.id }}"
+                                      data-order-number="{{ order.order_number }}">
                                     {% csrf_token %}
                                     <button type="submit" 
-                                            onclick="return confirm('Are you sure you want to cancel this order?')"
-                                            class="w-full px-4 py-2 bg-[#8f3232] text-white rounded-lg hover:bg-[#7a2a2a] font-medium transition duration-200">
+                                            class="w-full px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 font-medium transition duration-200 cancel-order-btn">
                                         Cancel Order
                                     </button>
                                 </form>
@@ -449,7 +442,7 @@
                                 {% endif %}
                                 
                                 <a href="{% url 'products:product_list'%}" 
-                                   class="block w-full text-center px-4 py-2 border bg-[#8f3232]  text-white rounded-lg font-medium hover:bg-[#7a2a2a] transition duration-200">
+                                   class="block w-full text-center px-4 py-2 border-2 border-[#8f3232] text-[#8f3232] rounded-lg font-medium hover:bg-[#8f3232] hover:text-white transition duration-200">
                                     Continue Shopping 🛒
                                 </a>
                             </div>
@@ -460,6 +453,7 @@
         </div>
     </div>
 </div>
+{% endblock %}
 
 <style>
 /* Status timeline styling */
@@ -533,6 +527,94 @@ document.addEventListener('DOMContentLoaded', function() {
                     }
                 });
         }, 5000); // Check after 5 seconds
+    }
+});
+</script>
+{% block extra_scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Handle cancel order form submission with AJAX
+    const cancelForm = document.querySelector('.cancel-order-form');
+    
+    if (cancelForm) {
+        cancelForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            const orderNumber = this.getAttribute('data-order-number');
+            const orderId = this.getAttribute('data-order-id');
+            const button = this.querySelector('.cancel-order-btn');
+            const originalText = button.textContent;
+            
+            // Show confirmation dialog
+            if (!confirm(`Are you sure you want to cancel order #${orderNumber}? This action cannot be undone.`)) {
+                return;
+            }
+            
+            // Show loading state
+            button.textContent = 'Cancelling...';
+            button.disabled = true;
+            button.classList.add('opacity-75', 'cursor-not-allowed');
+            
+            // Submit via AJAX
+            fetch(this.action, {
+                method: 'POST',
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'X-CSRFToken': this.querySelector('[name=csrfmiddlewaretoken]').value
+                },
+                body: new FormData(this)
+            })
+            .then(response => {
+                if (!response.ok) {
+                    return response.json().then(data => {
+                        throw new Error(data.message || `HTTP error! status: ${response.status}`);
+                    });
+                }
+                return response.json();
+            })
+            .then(data => {
+                if (data.success) {
+                    showSuccess(`Order #${orderNumber} cancelled successfully!`, 4000);
+                    
+                    // Update the status badge
+                    const statusElements = document.querySelectorAll('[class*="get_status_display_class"]');
+                    statusElements.forEach(el => {
+                        el.textContent = data.new_status;
+                        el.className = 'px-3 py-1 inline-flex text-sm leading-5 font-semibold rounded-full bg-red-100 text-red-800';
+                    });
+                    
+                    // Update page header status
+                    const pageHeaderStatus = document.querySelector('h1').nextElementSibling;
+                    if (pageHeaderStatus) {
+                        const newStatusSpan = pageHeaderStatus.querySelector('span[class*="rounded-full"]');
+                        if (newStatusSpan) {
+                            newStatusSpan.textContent = data.new_status;
+                            newStatusSpan.className = 'px-3 py-1 inline-flex text-sm leading-5 font-semibold rounded-full bg-red-100 text-red-800';
+                        }
+                    }
+                    
+                    // Hide the cancel form
+                    cancelForm.style.display = 'none';
+                    
+                    // Reload page after 2 seconds to show all updates
+                    setTimeout(() => {
+                        location.reload();
+                    }, 2000);
+                } else {
+                    showError(data.message || 'Failed to cancel order');
+                    button.textContent = originalText;
+                    button.disabled = false;
+                    button.classList.remove('opacity-75', 'cursor-not-allowed');
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                showError(error.message || 'An error occurred while cancelling the order');
+                button.textContent = originalText;
+                button.disabled = false;
+                button.classList.remove('opacity-75', 'cursor-not-allowed');
+            });
+        });
     }
 });
 </script>

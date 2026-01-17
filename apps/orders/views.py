@@ -8,6 +8,7 @@ from django.http import HttpResponse
 from django.template.loader import get_template
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
+from django.views.decorators.http import require_http_methods
 from datetime import timedelta
 from cart.models import Cart, CartItem
 from products.models import Product
@@ -22,6 +23,7 @@ import traceback
 import io
 import os
 from utils.invoice_generator import InvoiceGenerator
+from orders.models import CakeCustomization
 
 @customer_required
 def create_order_with_payment(request):
@@ -178,32 +180,30 @@ def customize_cake(request, product_id):
         print(f"Form is valid: {form.is_valid()}")
         if not form.is_valid():
             print(f"Form errors: {form.errors}")
-            print(f"Form non-field errors: {form.non_field_errors()}")
         
         if form.is_valid():
             try:
-                # Get the session-safe data from form
-                session_data = form.get_session_data()
-                print(f"Session data prepared: {session_data}")
+                # Create CakeCustomization record
+                cake_customization = CakeCustomization.objects.create(
+                    user=request.user,
+                    product=product,
+                    cake_flavor=form.cleaned_data.get('flavor', ''),
+                    cake_custom_flavor=form.cleaned_data.get('custom_flavor', ''),
+                    cake_weight=form.cleaned_data.get('weight', ''),
+                    cake_custom_weight=form.cleaned_data.get('custom_weight', ''),
+                    cake_tiers=int(form.cleaned_data.get('tiers', 1)),
+                    message_on_cake=form.cleaned_data.get('message_on_cake', ''),
+                    delivery_date=form.cleaned_data.get('delivery_date'),
+                    special_instructions=form.cleaned_data.get('special_instructions', ''),
+                    reference_image=form.cleaned_data.get('reference_image'),
+                    reference_title=form.cleaned_data.get('reference_title', ''),
+                    reference_description=form.cleaned_data.get('reference_description', ''),
+                )
                 
-                if session_data:
-                    # Store in session with product_id as key
-                    request.session[f'cake_customization_{product_id}'] = session_data
-                    
-                    # Store reference image info if uploaded
-                    if form.cleaned_data.get('reference_image'):
-                        print(f"Reference image uploaded: {form.cleaned_data['reference_image'].name}")
-                        request.session[f'cake_reference_{product_id}'] = {
-                            'image_name': form.cleaned_data['reference_image'].name,
-                            'title': form.cleaned_data.get('reference_title', ''),
-                            'description': form.cleaned_data.get('reference_description', ''),
-                        }
-                    
-                    # Add to cart with customization
-                    return add_customized_cake_to_cart(request, product_id, form)
-                else:
-                    messages.error(request, "Failed to save customization data.")
-                    print("ERROR: session_data is None")
+                print(f"CakeCustomization created with ID: {cake_customization.id}")
+                
+                # Add to cart with customization reference
+                return add_customized_cake_to_cart(request, product_id, form, cake_customization)
                     
             except Exception as e:
                 messages.error(request, f"Error saving customization: {str(e)}")
@@ -212,10 +212,8 @@ def customize_cake(request, product_id):
                 traceback.print_exc()
         else:
             messages.error(request, "Please correct the errors below.")
-            print("Form errors:", form.errors)
     else:
         form = CakeCustomizationForm(product=product)
-        print(f"Form fields: {list(form.fields.keys())}")
     
     context = {
         'product': product,
@@ -225,7 +223,7 @@ def customize_cake(request, product_id):
     return render(request, 'orders/customize_cake.html', context)
 
 @customer_required
-def add_customized_cake_to_cart(request, product_id, form):
+def add_customized_cake_to_cart(request, product_id, form, cake_customization):
     """Helper function to add customized cake to cart"""
     try:
         product = get_object_or_404(Product, id=product_id, is_cake=True)
@@ -234,10 +232,11 @@ def add_customized_cake_to_cart(request, product_id, form):
         # Get quantity from form
         quantity = form.cleaned_data.get('quantity', 1)
         
-        # Check if item already exists in cart
+        # Create/update cart item with cake customization reference
         cart_item, item_created = CartItem.objects.get_or_create(
             cart=cart,
             product=product,
+            cake_customization=cake_customization,
             defaults={'quantity': quantity}
         )
         
@@ -254,7 +253,7 @@ def add_customized_cake_to_cart(request, product_id, form):
         
         messages.success(request, f"✅ Added customized {product.name} to cart!")
         messages.info(request, 
-                     f"Customization:  {weight_display}, "
+                     f"Customization: {weight_display}, "
                      f"{form.cleaned_data.get('tiers')} tier(s), "
                      f"Delivery: {form.cleaned_data.get('delivery_date')}")
         
@@ -268,14 +267,9 @@ def add_customized_cake_to_cart(request, product_id, form):
 @customer_required
 def order_create(request):
     """Create order from cart items with cake customization"""
-    print(f"=== DEBUG ORDER_CREATE ===")
-    print(f"DEBUG: Method: {request.method}")
-    print(f"DEBUG: User: {request.user}")
-    
     try:
-        # Get user's cart
         cart = get_object_or_404(Cart, user=request.user)
-        cart_items = cart.items.all().select_related('product')
+        cart_items = cart.items.all().select_related('product', 'cake_customization')
         
         if not cart_items:
             messages.warning(request, "Your cart is empty. Add items before checkout.")
@@ -296,37 +290,12 @@ def order_create(request):
         # Get cake items
         cake_items = [item for item in cart_items if item.product.is_cake]
         
-        # Initialize forms
+        # Initialize order form
         order_form = OrderCreateForm(request.POST or None)
-        customization_forms = {}
-        
-        # DEBUG: Print session data
-        print("=== DEBUG SESSION DATA ===")
-        for key in request.session.keys():
-            if 'cake_customization' in key:
-                print(f"{key}: {request.session[key]}")
-        
-        # Check for customization data in session for cake items
-        session_customizations = {}
-        for cart_item in cake_items:
-            customization_key = f'cake_customization_{cart_item.product.id}'
-            if customization_key in request.session:
-                session_data = request.session[customization_key]
-                print(f"DEBUG: Found session data for {cart_item.product.id}: {session_data}")
-                # IMPORTANT: Remove file data from session
-                if 'reference_image' in session_data:
-                    # Create a copy without the file data
-                    cleaned_data = {k: v for k, v in session_data.items() if k != 'reference_image'}
-                    session_customizations[cart_item.product.id] = cleaned_data
-                    print(f"DEBUG: Removed reference_image from session data")
-                else:
-                    session_customizations[cart_item.product.id] = session_data
-            else:
-                print(f"DEBUG: No session data found for {cart_item.product.id}")
         
         # Calculate initial totals
         subtotal = cart.total_price
-        delivery_fee = 100  # Default outside Bhaktapur fee
+        delivery_fee = 100
         total = subtotal + delivery_fee
         
         if request.method == 'POST':
@@ -334,34 +303,6 @@ def order_create(request):
             if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
                 return create_order_with_payment(request)
             
-            # Regular form submission
-            # Create customization forms for each cake item
-            for i, cart_item in enumerate(cake_items):
-                form_key = f'cake_form_{cart_item.product.id}'
-                
-                # Pre-fill form with session data if available
-                initial_data = None
-                if cart_item.product.id in session_customizations:
-                    initial_data = session_customizations[cart_item.product.id]
-                    print(f"DEBUG: Loaded session data for product {cart_item.product.id}: {initial_data}")
-                
-                # Create form
-                form = CakeCustomizationForm(
-                    request.POST,
-                    request.FILES,
-                    prefix=form_key,
-                    product=cart_item.product,
-                    initial=initial_data
-                )
-                
-                # Make reference fields optional for checkout
-                form.fields['reference_image'].required = False
-                form.fields['reference_title'].required = False
-                form.fields['reference_description'].required = False
-                
-                customization_forms[i] = form
-            
-            # Validate order form first
             if order_form.is_valid():
                 print("DEBUG: Order form is valid")
                 
@@ -370,243 +311,136 @@ def order_create(request):
                 delivery_fee = calculate_delivery_fee(address)
                 total = subtotal + delivery_fee
                 
-                # Validate all cake customization forms
-                all_valid = True
-                for i, cart_item in enumerate(cake_items):
-                    form = customization_forms[i]
-                    if not form.is_valid():
-                        all_valid = False
-                        # Show form errors
-                        for field, errors in form.errors.items():
-                            for error in errors:
-                                messages.error(request, f"Cake customization error ({cart_item.product.name}): {error}")
-                        print(f"DEBUG: Form for {cart_item.product.name} has errors: {form.errors}")
-                    else:
-                        print(f"DEBUG: Form for {cart_item.product.name} is valid")
-                        print(f"DEBUG: Form cleaned data keys: {list(form.cleaned_data.keys())}")
-                
-                if all_valid:
-                    try:
-                        with transaction.atomic():
-                            # Get form data
-                            delivery_type = order_form.cleaned_data.get('delivery_type', 'delivery')
-                            payment_method = order_form.cleaned_data.get('payment_method', 'cod')
-                            phone_number = order_form.cleaned_data.get('phone_number', '')
-                            special_instructions = order_form.cleaned_data.get('special_instructions', '')
-                            
-                            print(f"DEBUG: Creating order for user {request.user.id}")
-                            
-                            # Create the order with calculated totals
-                            order = Order.objects.create(
-                                # User information
-                                user=request.user,
+                try:
+                    with transaction.atomic():
+                        # Get form data
+                        delivery_type = order_form.cleaned_data.get('delivery_type', 'delivery')
+                        payment_method = order_form.cleaned_data.get('payment_method', 'cod')
+                        phone_number = order_form.cleaned_data.get('phone_number', '')
+                        special_instructions = order_form.cleaned_data.get('special_instructions', '')
+                        
+                        print(f"DEBUG: Creating order for user {request.user.id}")
+                        
+                        # Create the order
+                        order = Order.objects.create(
+                            user=request.user,
+                            delivery_type=delivery_type,
+                            delivery_address=address if delivery_type == 'delivery' else '',
+                            delivery_fee=delivery_fee,
+                            phone_number=phone_number,
+                            special_instructions=special_instructions,
+                            payment_method=payment_method,
+                            payment_status='pending',
+                            status='pending',
+                            subtotal=subtotal,
+                            total_amount=total,
+                        )
+                        
+                        print(f"DEBUG: Order created with ID {order.id}, Number {order.order_number}")
+                        
+                        # Create order items from cart items
+                        for cart_item in cart_items:
+                            if cart_item.product.is_cake and cart_item.cake_customization:
+                                # Handle cake items with customization
+                                customization = cart_item.cake_customization
                                 
-                                # Delivery information
-                                delivery_type=delivery_type,
-                                delivery_address=address if delivery_type == 'delivery' else '',
-                                delivery_fee=delivery_fee,
+                                # Calculate price with tier multiplier
+                                base_price = cart_item.product.base_price
+                                tier_multiplier = {
+                                    1: 1.0,
+                                    2: 1.5,
+                                    3: 2.0
+                                }.get(customization.cake_tiers, 1.0)
                                 
-                                # Contact information
-                                phone_number=phone_number,
-                                special_instructions=special_instructions,
+                                final_price = float(base_price) * tier_multiplier
                                 
-                                # Payment information
-                                payment_method=payment_method,
-                                payment_status='pending',
+                                # Create order item
+                                order_item = OrderItem.objects.create(
+                                    order=order,
+                                    product=cart_item.product,
+                                    quantity=cart_item.quantity,
+                                    price=final_price,
+                                    cake_flavor=customization.cake_flavor,
+                                    cake_custom_flavor=customization.cake_custom_flavor,
+                                    cake_weight=customization.cake_weight,
+                                    cake_custom_weight=customization.cake_custom_weight,
+                                    cake_tiers=customization.cake_tiers,
+                                    message_on_cake=customization.message_on_cake,
+                                    delivery_date=customization.delivery_date,
+                                    special_instructions=customization.special_instructions,
+                                )
                                 
-                                # Status
-                                status='pending',
-                                
-                                # Financial information
-                                subtotal=subtotal,
-                                total_amount=total,
-                            )
-                            
-                            print(f"DEBUG: Order created with ID {order.id}, Number {order.order_number}")
-                            
-                            # Create order items
-                            for i, cart_item in enumerate(cart_items):
-                                if cart_item.product.is_cake:
-                                    # Handle cake items with customization
-                                    cake_form = customization_forms[i]
-                                    
-                                    # Get customization data
-                                    weight = cake_form.cleaned_data.get('weight', '1')
-                                    custom_weight = cake_form.cleaned_data.get('custom_weight', '')
-                                    tiers = int(cake_form.cleaned_data.get('tiers', 1))
-                                    message_on_cake = cake_form.cleaned_data.get('message_on_cake', '')
-                                    delivery_date = cake_form.cleaned_data.get('delivery_date')
-                                    cake_special_instructions = cake_form.cleaned_data.get('special_instructions', '')
-                                    quantity = cake_form.cleaned_data.get('quantity', cart_item.quantity)
-                                    
-                                    # Get reference image data - may be None if not re-uploaded
-                                    reference_image = cake_form.cleaned_data.get('reference_image')
-                                    reference_title = cake_form.cleaned_data.get('reference_title', '')
-                                    reference_description = cake_form.cleaned_data.get('reference_description', '')
-                                    
-                                    print(f"DEBUG: Processing cake order item - Has reference image: {bool(reference_image)}")
-                                    print(f"DEBUG: Reference image type: {type(reference_image)}")
-                                    
-                                    # Calculate price with tier multiplier
-                                    base_price = cart_item.product.base_price
-                                    tier_multiplier = {
-                                        1: 1.0,
-                                        2: 1.5,
-                                        3: 2.0
-                                    }.get(tiers, 1.0)
-                                    
-                                    final_price = float(base_price) * tier_multiplier
-                                    
-                                    print(f"DEBUG: Creating cake order item for product {cart_item.product.id}")
-                                    
-                                    # Create order item with customization
-                                    order_item = OrderItem.objects.create(
-                                        order=order,
-                                        product=cart_item.product,
-                                        quantity=quantity,
-                                        price=final_price,
-                                        
-                                        # Cake customization fields
-                                        cake_weight=weight,
-                                        cake_custom_weight=custom_weight,
-                                        cake_tiers=tiers,
-                                        message_on_cake=message_on_cake,
-                                        delivery_date=delivery_date,
-                                        special_instructions=cake_special_instructions,
-                                    )
-                                    
-                                    print(f"DEBUG: Order item created with ID {order_item.id}")
-                                    
-                                    # Save design reference if NEW image uploaded
-                                    if reference_image and hasattr(reference_image, 'size'):  # Check if it's a file object
-                                        try:
-                                            design_reference = CakeDesignReference(
-                                                order=order,
-                                                order_item=order_item,
-                                                image=reference_image,
-                                                title=reference_title or f"Design for {order_item.product.name}",
-                                                description=reference_description or f"Custom cake order",
-                                            )
-                                            design_reference.save()
-                                            print(f"DEBUG: Design reference saved for order item {order_item.id}")
-                                        except Exception as e:
-                                            print(f"Error saving design reference: {e}")
-                                            # Don't fail the whole order if design reference fails
-                                    
-                                    # Remove customization from session
-                                    session_key = f'cake_customization_{cart_item.product.id}'
-                                    if session_key in request.session:
-                                        del request.session[session_key]
-                                        print(f"DEBUG: Removed {session_key} from session")
-                                    
-                                else:
-                                    # Handle regular items
-                                    final_price = float(cart_item.product.base_price)
-                                    
-                                    print(f"DEBUG: Creating regular order item for product {cart_item.product.id}")
-                                    
-                                    order_item = OrderItem.objects.create(
-                                        order=order,
-                                        product=cart_item.product,
-                                        quantity=cart_item.quantity,
-                                        price=final_price,
-                                    )
-                            
-                            # Clear the cart after successful order
-                            cart.items.all().delete()
-                            
-                            messages.success(
-                                request, 
-                                f"✅ Order placed successfully! Your order number is {order.order_number}"
-                            )
-                            
-                            # Redirect based on payment method
-                            if payment_method == 'esewa':
-                                # Create payment transaction for eSewa
-                                try:
-                                    payment = PaymentTransaction.objects.create(
-                                        user=request.user,
-                                        order=order,
-                                        amount=order.total_amount,
-                                        total_amount=order.total_amount,
-                                        tax_amount=0,
-                                        service_charge=0,
-                                        delivery_charge=delivery_fee,
-                                        status='initiated',
-                                        product_code='EPAYTEST',
-                                    )
-                                    
-                                    print(f"DEBUG: Payment transaction created for order {order.id}")
-                                    
-                                    # Redirect to eSewa payment
-                                    return redirect('payment:esewa_payment', order_id=order.id)
-                                    
-                                except Exception as e:
-                                    print(f"Error creating payment transaction: {e}")
-                                    messages.warning(request, "Order created but payment setup failed. Please contact support.")
-                                    return redirect('orders:order_confirmation', order_id=order.id)
+                                # Save design reference if image exists
+                                if customization.reference_image:
+                                    try:
+                                        CakeDesignReference.objects.create(
+                                            order=order,
+                                            order_item=order_item,
+                                            image=customization.reference_image,
+                                            title=customization.reference_title or f"Design for {order_item.product.name}",
+                                            description=customization.reference_description or f"Custom cake order",
+                                        )
+                                        print(f"DEBUG: Design reference saved for order item {order_item.id}")
+                                    except Exception as e:
+                                        print(f"Error saving design reference: {e}")
                                 
                             else:
-                                # COD - go directly to confirmation
-                                print(f"DEBUG: COD order, redirecting to confirmation")
+                                # Handle regular items
+                                final_price = float(cart_item.product.base_price)
+                                
+                                OrderItem.objects.create(
+                                    order=order,
+                                    product=cart_item.product,
+                                    quantity=cart_item.quantity,
+                                    price=final_price,
+                                )
+                        
+                        # Clear the cart
+                        cart.items.all().delete()
+                        
+                        messages.success(
+                            request, 
+                            f"✅ Order placed successfully! Your order number is {order.order_number}"
+                        )
+                        
+                        # Redirect based on payment method
+                        if payment_method == 'esewa':
+                            try:
+                                payment = PaymentTransaction.objects.create(
+                                    user=request.user,
+                                    order=order,
+                                    amount=order.total_amount,
+                                    total_amount=order.total_amount,
+                                    tax_amount=0,
+                                    service_charge=0,
+                                    delivery_charge=delivery_fee,
+                                    status='initiated',
+                                    product_code='EPAYTEST',
+                                )
+                                return redirect('payment:esewa_payment', order_id=order.id)
+                            except Exception as e:
+                                print(f"Error creating payment transaction: {e}")
+                                messages.warning(request, "Order created but payment setup failed. Please contact support.")
                                 return redirect('orders:order_confirmation', order_id=order.id)
+                        else:
+                            return redirect('orders:order_confirmation', order_id=order.id)
                             
-                    except Exception as e:
-                        print(f"Error creating order: {str(e)}")
-                        import traceback
-                        traceback.print_exc()
-                        messages.error(request, f"❌ Error creating order: {str(e)}")
-                        return redirect('cart:cart_detail')
-                else:
-                    # Form validation failed
-                    messages.error(request, "Please correct the errors below.")
-                    print("DEBUG: Cake form validation failed")
+                except Exception as e:
+                    print(f"Error creating order: {str(e)}")
+                    import traceback
+                    traceback.print_exc()
+                    messages.error(request, f"❌ Error creating order: {str(e)}")
+                    return redirect('cart:cart_detail')
             else:
-                # Order form validation failed
                 for field, errors in order_form.errors.items():
                     for error in errors:
                         messages.error(request, f"{field}: {error}")
-                print(f"DEBUG: Order form errors: {order_form.errors}")
         
-        # For GET request or invalid POST, initialize forms
-        for i, cart_item in enumerate(cake_items):
-            form_key = f'cake_form_{cart_item.product.id}'
-            
-            # Pre-fill form with session data if available
-            initial_data = None
-            if cart_item.product.id in session_customizations:
-                initial_data = session_customizations[cart_item.product.id]
-                print(f"DEBUG: Loaded session data for product {cart_item.product.id} (GET): {initial_data}")
-            
-            # Create form
-            form = CakeCustomizationForm(
-                prefix=form_key,
-                product=cart_item.product,
-                initial=initial_data
-            )
-            
-            # Make reference fields optional for checkout
-            form.fields['reference_image'].required = False
-            form.fields['reference_title'].required = False
-            form.fields['reference_description'].required = False
-            
-            customization_forms[i] = form
-        
-        # Recalculate totals for display
-        if request.method == 'POST':
-            address = request.POST.get('delivery_address', '')
-        else:
-            address = ''
-        
-        delivery_fee = calculate_delivery_fee(address)
-        total = subtotal + delivery_fee
-        
-        # Prepare context and render template
+        # Prepare context and render
         context = {
             'cart': cart,
             'cart_items': cart_items,
             'order_form': order_form,
-            'customization_forms': customization_forms,
             'subtotal': subtotal,
             'delivery_fee': delivery_fee,
             'total': total,
@@ -622,7 +456,7 @@ def order_create(request):
         traceback.print_exc()
         messages.error(request, f"❌ An error occurred: {str(e)}")
         return redirect('cart:cart_detail')
-          
+
 @customer_required
 def order_confirmation(request, order_id):
     """Show order confirmation for both COD and eSewa payments"""
@@ -855,24 +689,74 @@ def order_detail(request, order_id):
     return render(request, 'orders/order_detail.html', context)
 
 @customer_required
+@require_http_methods(["POST"])
 def order_cancel(request, order_id):
-    """Cancel an order (only if status is pending)"""
-    if request.method == 'POST':
-        try:
-            order = get_object_or_404(Order, id=order_id, user=request.user)
+    """Cancel an order (only if status is pending or confirmed)"""
+    try:
+        order = get_object_or_404(Order, id=order_id, user=request.user)
+        
+        # Check if order can be cancelled
+        if order.status not in ['pending', 'confirmed']:
+            message = f"Order #{order.order_number} cannot be cancelled at this stage"
             
-            if order.status == 'pending':
-                order.status = 'cancelled'
-                order.save()
-                messages.success(request, f"✅ Order {order.order_number} has been cancelled.")
+            if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                return JsonResponse({
+                    'success': False,
+                    'message': message
+                }, status=400)
             else:
-                messages.error(request, "❌ Only pending orders can be cancelled.")
-                
-        except Exception as e:
-            messages.error(request, f"❌ Error cancelling order: {str(e)}")
+                messages.error(request, message)
+                return redirect('orders:order_detail', order_id=order.id)
+        
+        # Cancel the order
+        old_status = order.status
+        order.status = 'cancelled'
+        order.save()
+        
+        success_message = f"Order #{order.order_number} has been cancelled successfully"
+        
+        print(f"Order {order.id} cancelled. Old status: {old_status}, New status: {order.status}")
+        
+        # For AJAX requests
+        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+            return JsonResponse({
+                'success': True,
+                'message': success_message,
+                'order_id': order.id,
+                'order_number': order.order_number,
+                'new_status': order.get_status_display()
+            }, status=200)
+        else:
+            # For regular form submission
+            messages.success(request, success_message)
+            return redirect('orders:order_list')
+            
+    except Order.DoesNotExist:
+        message = 'Order not found'
+        
+        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+            return JsonResponse({
+                'success': False,
+                'message': message
+            }, status=404)
+        else:
+            messages.error(request, message)
+            return redirect('orders:order_list')
     
-    return redirect('orders:order_list')
-
+    except Exception as e:
+        error_message = f'Error cancelling order: {str(e)}'
+        print(f"Error in order_cancel: {error_message}")
+        import traceback
+        traceback.print_exc()
+        
+        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+            return JsonResponse({
+                'success': False,
+                'message': error_message
+            }, status=500)
+        else:
+            messages.error(request, error_message)
+            return redirect('orders:order_list')
 
 @customer_required
 def order_track(request, order_number):

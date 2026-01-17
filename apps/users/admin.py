@@ -1,4 +1,5 @@
 from django.contrib import admin
+from django.contrib.auth.admin import UserAdmin
 from django.contrib.auth.admin import GroupAdmin
 from django.contrib.auth.models import Group
 from django.utils.html import format_html
@@ -22,7 +23,7 @@ def is_staff_user(request):
 
 # ==================== CUSTOM USER ADMIN ====================
 @admin.register(CustomUser)
-class CustomUserAdmin(ModelAdmin):
+class CustomUserAdmin(UserAdmin):
     list_display = ['username', 'email', 'mobile_no', 'user_type', 'first_name', 'last_name', 'is_active', 'date_joined']
     list_filter = ['user_type', 'is_active', 'date_joined']
     search_fields = ['username', 'email', 'mobile_no', 'first_name', 'last_name']

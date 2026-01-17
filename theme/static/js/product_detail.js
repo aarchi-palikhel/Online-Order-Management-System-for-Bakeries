@@ -175,11 +175,7 @@ function initAddToCartAJAX() {
         })
         .catch(error => {
             console.error('Error:', error);
-            if (typeof showGlobalNotification === 'function') {
-                showGlobalNotification('An error occurred. Please try again.', 'error');
-            } else {
-                showNotification('error', 'An error occurred. Please try again.');
-            }
+            showError('An error occurred. Please try again.');
         })
         .finally(() => {
             // Restore button state

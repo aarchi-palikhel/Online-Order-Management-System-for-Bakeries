@@ -188,6 +188,21 @@
     </div>
 </div>
 
+<!-- Hidden message elements for notifications -->
+{% if error_notification %}
+<div data-message-type="{{ error_notification.type }}" 
+     data-message-text="{{ error_notification.message }}" 
+     style="display:none;"></div>
+{% endif %}
+
+{% if messages %}
+{% for message in messages %}
+<div data-message-type="{% if message.tags %}{{ message.tags }}{% else %}info{% endif %}" 
+     data-message-text="{{ message }}" 
+     style="display:none;"></div>
+{% endfor %}
+{% endif %}
+
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     const customerBtn = document.getElementById('customerBtn');
@@ -306,6 +321,22 @@ document.addEventListener('DOMContentLoaded', function() {
         input.addEventListener('blur', function() {
             this.parentElement.classList.remove('ring-2', 'ring-[#8f3232]', 'ring-opacity-50');
         });
+    });
+    
+    // Check for Django messages and show notifications
+    document.addEventListener('DOMContentLoaded', function() {
+        // Check for error messages from form
+        const formErrors = document.querySelectorAll('.text-red-600');
+        if (formErrors.length > 0) {
+            formErrors.forEach(error => {
+                if (error.textContent.trim()) {
+                    // Show error notification
+                    if (typeof showError === 'function') {
+                        showError(error.textContent.trim());
+                    }
+                }
+            });
+        }
     });
 });
 

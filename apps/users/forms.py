@@ -7,6 +7,7 @@ from .models import Customer
 User = get_user_model()
 
 class CustomerCreationForm(UserCreationForm):
+    
     first_name = forms.CharField(
         required=True,
         widget=forms.TextInput(attrs={

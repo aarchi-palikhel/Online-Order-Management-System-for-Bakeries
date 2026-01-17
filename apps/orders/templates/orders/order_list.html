@@ -11,14 +11,11 @@
         <p class="text-gray-600">View and manage your orders</p>
     </div>
 
+    <!-- Hidden message elements-->
     {% if messages %}
-    <div class="mb-6">
         {% for message in messages %}
-        <div class="p-4 mb-2 rounded-lg {% if message.tags == 'error' %}bg-red-50 text-red-700{% elif message.tags == 'success' %}bg-green-50 text-green-700{% elif message.tags == 'warning' %}bg-yellow-50 text-yellow-700{% else %}bg-blue-50 text-blue-700{% endif %}">
-            {{ message }}
-        </div>
+        <div data-message-type="{% if message.tags %}{{ message.tags }}{% else %}info{% endif %}" data-message-text="{{ message }}" style="display:none;"></div>
         {% endfor %}
-    </div>
     {% endif %}
 
     <!-- Order Stats -->
@@ -172,7 +169,7 @@
                             </div>
                         </td>
                         <td class="px-6 py-4 whitespace-nowrap">
-                            <span class="px-3 py-1 inline-flex text-xs leading-5 font-semibold rounded-full {{ order.get_status_display_class }}">
+                            <span class="px-3 py-1 inline-flex text-xs leading-5 font-semibold rounded-full {{ order.get_status_display_class }}" data-status="{{ order.status }}">
                                 {{ order.get_status_display }}
                             </span>
                             {% if order.display_delivery_fee == 0 %}
@@ -182,24 +179,32 @@
                             {% endif %}
                         </td>
                         <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                            <div class="flex space-x-2">
+                            <div class="flex items-center gap-4">
+                                <!-- View Button -->
                                 <a href="{% url 'orders:order_detail' order.id %}" 
-                                   class="text-[#8f3232] hover:text-[#7a2a2a] font-medium">
+                                   class="text-[#8f3232] hover:text-[#7a2a2a] font-medium transition duration-200 inline-flex items-center">
                                     View
                                 </a>
-                                {% if order.status == 'pending' %}
-                                <form method="post" action="{% url 'orders:order_cancel' order.id %}" class="inline">
+                                
+                                <!-- Cancel Button (if pending) -->
+                                {% if order.status == 'pending' or order.status == 'confirmed' %}
+                                <form method="post" 
+                                      action="{% url 'orders:order_cancel' order.id %}" 
+                                      class="inline cancel-order-form" 
+                                      data-order-id="{{ order.id }}"
+                                      data-order-number="{{ order.order_number }}">
                                     {% csrf_token %}
                                     <button type="submit" 
-                                            onclick="return confirm('Are you sure you want to cancel this order?')"
-                                            class="text-red-600 hover:text-red-800 font-medium ml-3">
+                                            class="text-red-600 hover:text-red-800 font-medium transition duration-200 cancel-order-btn">
                                         Cancel
                                     </button>
                                 </form>
                                 {% endif %}
+                                
+                                <!-- Invoice Button (if completed) -->
                                 {% if order.status == 'completed' %}
                                 <a href="{% url 'orders:order_invoice_pdf' order.id %}" 
-                                   class="text-blue-600 hover:text-blue-800 font-medium ml-3">
+                                   class="text-blue-600 hover:text-blue-800 font-medium transition duration-200 inline-flex items-center">
                                     Invoice
                                 </a>
                                 {% endif %}
@@ -251,4 +256,96 @@
 .text-gray-800 { color: #1f2937; }
 </style>
 
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Handle cancel order form submission with AJAX
+    const cancelForms = document.querySelectorAll('.cancel-order-form');
+    
+    cancelForms.forEach(form => {
+        form.addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            const orderNumber = this.getAttribute('data-order-number');
+            const orderId = this.getAttribute('data-order-id');
+            const button = this.querySelector('.cancel-order-btn');
+            const originalText = button.textContent;
+            
+            // Show confirmation dialog
+            if (!confirm(`Are you sure you want to cancel order #${orderNumber}? This action cannot be undone.`)) {
+                return;
+            }
+            
+            // Show loading state
+            button.textContent = 'Cancelling...';
+            button.disabled = true;
+            button.classList.add('opacity-75', 'cursor-not-allowed');
+            
+            console.log('Submitting cancel form to:', this.action);
+            
+            // Submit via AJAX
+            fetch(this.action, {
+                method: 'POST',
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'X-CSRFToken': this.querySelector('[name=csrfmiddlewaretoken]').value
+                }
+            })
+            .then(response => {
+                console.log('Response status:', response.status);
+                
+                // Always try to parse JSON
+                return response.json().then(data => ({
+                    status: response.status,
+                    data: data
+                }));
+            })
+            .then(({status, data}) => {
+                console.log('Response data:', data);
+                
+                if (status === 200 && data.success) {
+                    showSuccess(data.message || `Order #${orderNumber} cancelled successfully!`, 4000);
+                    
+                    // Find the order row and update it
+                    const orderRow = form.closest('tr');
+                    if (orderRow) {
+                        // Update status badge
+                        const statusBadge = orderRow.querySelector('[data-status]');
+                        if (statusBadge) {
+                            statusBadge.textContent = data.new_status;
+                            statusBadge.className = 'px-3 py-1 inline-flex text-xs leading-5 font-semibold rounded-full bg-red-100 text-red-800';
+                        }
+                        
+                        // Remove cancel button
+                        form.remove();
+                        
+                        // Add visual indication
+                        orderRow.classList.add('opacity-75');
+                        orderRow.style.backgroundColor = '#fef2f2';
+                    }
+                    
+                    // Reload page after delay
+                    setTimeout(() => {
+                        location.reload();
+                    }, 2500);
+                } else {
+                    showError(data.message || 'Failed to cancel order', 4000);
+                    button.textContent = originalText;
+                    button.disabled = false;
+                    button.classList.remove('opacity-75', 'cursor-not-allowed');
+                }
+            })
+            .catch(error => {
+                console.error('Fetch error:', error);
+                showError('An error occurred while cancelling the order', 4000);
+                button.textContent = originalText;
+                button.disabled = false;
+                button.classList.remove('opacity-75', 'cursor-not-allowed');
+            });
+        });
+    });
+});
+</script>
 {% endblock %}

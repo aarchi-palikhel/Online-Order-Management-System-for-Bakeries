@@ -4,6 +4,20 @@ from django.conf import settings
 from .forms import ContactForm
 from products.models import Product
 from django.contrib.auth import get_user_model
+from django.http import JsonResponse
+from django.views.decorators.http import require_http_methods
+
+@require_http_methods(["POST"])
+def clear_notification(request):
+    """Clear session notification after displaying"""
+    if 'notification' in request.session:
+        del request.session['notification']
+        request.session.save()
+    
+    if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+        return JsonResponse({'success': True})
+    
+    return JsonResponse({'success': True})
 
 def home(request):
     featured_products = Product.objects.filter(

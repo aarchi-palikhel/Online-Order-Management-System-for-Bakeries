@@ -1,7 +1,6 @@
 {% extends 'base.html' %}
 {% load static %}
 {% load orders_filters %}
-
 {% block title %}Checkout - Live Bakery{% endblock %}
 
 {% block extra_head %}
@@ -81,7 +80,7 @@
                     </label>
                 </div>
                 
-                <!-- Pickup Information (Hidden by default) -->
+                <!-- Pickup Information -->
                 <div id="pickup-info" class="mt-4 p-4 bg-blue-50 rounded-lg border border-blue-200 {% if order_form.delivery_type.value != 'pickup' %}hidden{% endif %}">
                     <h4 class="font-semibold text-blue-800 mb-2">Pickup Information</h4>
                     <div class="space-y-2 text-sm text-blue-700">
@@ -93,7 +92,7 @@
                 </div>
             </div>
 
-            <!-- Contact Information (Always visible) -->
+            <!-- Contact Information -->
             <div class="mb-8">
                 <div class="bg-white rounded-lg shadow-md p-6">
                     <h2 class="text-xl font-bold text-gray-800 mb-4 flex items-center">
@@ -126,7 +125,7 @@
                 </div>
             </div>
 
-            <!-- Delivery Information (Only for delivery) -->
+            <!-- Delivery Information -->
             <div id="delivery-info" class="mb-8 {% if order_form.delivery_type.value == 'pickup' %}hidden{% endif %}">
                 <div class="bg-white rounded-lg shadow-md p-6">
                     <h2 class="text-xl font-bold text-gray-800 mb-4 flex items-center">
@@ -159,26 +158,24 @@
                 </div>
             </div>
 
-            <!-- Cake Customization Section -->
-            {% if has_cakes %}
+            <!-- Cart Items Summary -->
             <div class="mb-8">
                 <div class="bg-white rounded-lg shadow-md p-6">
                     <h2 class="text-xl font-bold text-gray-800 mb-4 flex items-center">
                         <svg class="w-5 h-5 mr-2 text-[#8f3232]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 15.546c-.523 0-1.046.151-1.5.454a2.704 2.704 0 01-3 0 2.704 2.704 0 00-3 0 2.704 2.704 0 01-3 0 2.704 2.704 0 00-3 0 2.704 2.704 0 01-3 0v-3a2.704 2.704 0 013 0 2.704 2.704 0 003 0 2.704 2.704 0 013 0 2.704 2.704 0 003 0 2.704 2.704 0 013 0v3a2.704 2.704 0 01-1.5-.454z"/>
                         </svg>
-                        Cake Customization
+                        Order Items
                     </h2>
                     
-                    <div class="space-y-6">
-                        {% for cake_item in cake_items %}
-                        {% with form=customization_forms|get_form_by_index:forloop.counter0 %}
+                    <div class="space-y-4">
+                        {% for cart_item in cart_items %}
                         <div class="border border-gray-200 rounded-lg p-4">
-                            <div class="flex items-center mb-4">
+                            <div class="flex items-center mb-3">
                                 <div class="w-16 h-16 rounded-lg overflow-hidden mr-4">
-                                    {% if cake_item.product.images.exists %}
-                                    <img src="{{ cake_item.product.images.first.image.url }}" 
-                                         alt="{{ cake_item.product.name }}"
+                                    {% if cart_item.product.images.exists %}
+                                    <img src="{{ cart_item.product.images.first.image.url }}" 
+                                         alt="{{ cart_item.product.name }}"
                                          class="w-full h-full object-cover">
                                     {% else %}
                                     <div class="w-full h-full bg-gray-100 flex items-center justify-center">
@@ -186,161 +183,38 @@
                                     </div>
                                     {% endif %}
                                 </div>
-                                <div>
-                                    <h3 class="font-semibold text-gray-800 text-lg">{{ cake_item.product.name }}</h3>
-                                    <p class="text-sm text-gray-600">Quantity: {{ cake_item.quantity }}</p>
-                                    <p class="text-sm text-[#8f3232] font-medium">Rs. {{ cake_item.total_price }}</p>
+                                <div class="flex-1">
+                                    <h3 class="font-semibold text-gray-800">{{ cart_item.product.name }}</h3>
+                                    <p class="text-sm text-gray-600">Quantity: {{ cart_item.quantity }}</p>
+                                    <p class="text-sm text-[#8f3232] font-medium">Rs. {{ cart_item.total_price }}</p>
                                 </div>
                             </div>
                             
-                            <!-- Cake Customization Fields -->
-                            <div class="space-y-4">
-                                <!-- Weight Selection -->
-                                <div>
-                                    <label class="block text-sm font-medium text-gray-700 mb-2">Cake Weight *</label>
-                                    <div class="grid grid-cols-2 md:grid-cols-3 gap-2">
-                                        {% for value, label in form.weight.field.choices %}
-                                        <label class="relative">
-                                            <input type="radio" name="{{ form.prefix }}-weight" value="{{ value }}" 
-                                                   class="peer sr-only" {% if form.weight.value == value or forloop.first and not form.weight.value %}checked{% endif %}>
-                                            <div class="border-2 border-gray-200 rounded-lg p-3 text-center cursor-pointer hover:border-purple-400 peer-checked:border-purple-500 peer-checked:bg-purple-50">
-                                                <div class="font-medium text-gray-800">{{ label }}</div>
-                                            </div>
-                                        </label>
-                                        {% endfor %}
-                                    </div>
-                                    {% if form.weight.errors %}
-                                    <p class="text-red-500 text-sm mt-1">{{ form.weight.errors.0 }}</p>
+                            <!-- Show customization details if cake -->
+                            {% if cart_item.cake_customization %}
+                            <div class="bg-gray-50 rounded p-3 text-sm">
+                                <div class="font-medium text-gray-700 mb-2">Customization Details:</div>
+                                <ul class="space-y-1 text-gray-600">
+                                    {% if cart_item.cake_customization.cake_weight %}
+                                    <li>• Weight: {{ cart_item.cake_customization.display_weight }}</li>
                                     {% endif %}
-                                    
-                                    <!-- Custom Weight Input (Hidden by default) -->
-                                    <div id="custom-weight-{{ forloop.counter0 }}" class="mt-2 hidden">
-                                        <label class="block text-sm font-medium text-gray-700 mb-1">
-                                            Custom Weight (in pounds)
-                                        </label>
-                                        {{ form.custom_weight }}
-                                        {% if form.custom_weight.errors %}
-                                        <p class="text-red-500 text-sm mt-1">{{ form.custom_weight.errors.0 }}</p>
-                                        {% endif %}
-                                    </div>
-                                </div>
-                                
-                                <!-- Flavor Selection -->
-                                <div>
-                                    <label class="block text-sm font-medium text-gray-700 mb-2">Cake Flavor *</label>
-                                    {{ form.flavor }}
-                                    {% if form.flavor.errors %}
-                                    <p class="text-red-500 text-sm mt-1">{{ form.flavor.errors.0 }}</p>
+                                    {% if cart_item.cake_customization.cake_tiers %}
+                                    <li>• Tiers: {{ cart_item.cake_customization.cake_tiers }}</li>
                                     {% endif %}
-                                    
-                                    <!-- Custom Flavor Input (Hidden by default) -->
-                                    <div id="custom-flavor-{{ forloop.counter0 }}" class="mt-2 hidden">
-                                        <label class="block text-sm font-medium text-gray-700 mb-1">
-                                            Custom Flavor Details
-                                        </label>
-                                        {{ form.custom_flavor }}
-                                        {% if form.custom_flavor.errors %}
-                                        <p class="text-red-500 text-sm mt-1">{{ form.custom_flavor.errors.0 }}</p>
-                                        {% endif %}
-                                    </div>
-                                </div>
-                                
-                                <!-- Tiers Selection -->
-                                <div>
-                                    <label class="block text-sm font-medium text-gray-700 mb-2">Number of Tiers *</label>
-                                    <div class="flex space-x-4">
-                                        {% for value, label in form.tiers.field.choices %}
-                                        <label class="flex items-center">
-                                            <input type="radio" name="{{ form.prefix }}-tiers" value="{{ value }}" 
-                                                   class="mr-2" {% if form.tiers.value == value or forloop.first and not form.tiers.value %}checked{% endif %}>
-                                            <span>{{ label }}</span>
-                                        </label>
-                                        {% endfor %}
-                                    </div>
-                                    {% if form.tiers.errors %}
-                                    <p class="text-red-500 text-sm mt-1">{{ form.tiers.errors.0 }}</p>
+                                    {% if cart_item.cake_customization.message_on_cake %}
+                                    <li>• Message: "{{ cart_item.cake_customization.message_on_cake }}"</li>
                                     {% endif %}
-                                </div>
-                                
-                                <!-- Message on Cake -->
-                                <div>
-                                    <label class="block text-sm font-medium text-gray-700 mb-2">Message on Cake (Optional)</label>
-                                    {{ form.message_on_cake }}
-                                    <p class="text-xs text-gray-500 mt-1">Max 50 characters</p>
-                                </div>
-                                
-                                <!-- Delivery Date -->
-                                <div>
-                                    <label class="block text-sm font-medium text-gray-700 mb-2">Delivery Date *</label>
-                                    {{ form.delivery_date }}
-                                    {% if form.delivery_date.errors %}
-                                    <p class="text-red-500 text-sm mt-1">{{ form.delivery_date.errors.0 }}</p>
+                                    {% if cart_item.cake_customization.delivery_date %}
+                                    <li>• Delivery Date: {{ cart_item.cake_customization.delivery_date|date:"M d, Y" }}</li>
                                     {% endif %}
-                                    <p class="text-xs text-gray-500 mt-1">Please allow at least 2 days for preparation</p>
-                                </div>
-                                
-                                <!-- Reference Image -->
-                                <div>
-                                    <label class="block text-sm font-medium text-gray-700 mb-2">
-                                        Reference Image (Optional - Already uploaded during customization)
-                                    </label>
-                                    
-                                    <!-- Show message if image was already uploaded -->
-                                    {% with session_key='cake_customization_'|add:cake_item.product.id|stringformat:'s' %}
-                                    {% with customization=request.session|get_dict_item:session_key %}
-                                    {% if customization and customization.reference_image %}
-                                    <div class="mb-3 p-2 bg-green-50 border border-green-200 rounded text-sm">
-                                        <div class="flex items-center text-green-700">
-                                            <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                                            </svg>
-                                            <span>Image already uploaded during customization</span>
-                                        </div>
-                                    </div>
-                                    {% endif %}
-                                    {% endwith %}
-                                    {% endwith %}
-                                    
-                                    <div class="text-sm text-gray-500 mb-2">
-                                        You can upload a different image or leave this empty to keep the previously uploaded image.
-                                    </div>
-                                    
-                                    {{ form.reference_image }}
-                                    <div class="mt-2">
-                                        <label class="block text-sm font-medium text-gray-700 mb-1">
-                                            Reference Title (Optional)
-                                        </label>
-                                        {{ form.reference_title }}
-                                    </div>
-                                    <div class="mt-2">
-                                        <label class="block text-sm font-medium text-gray-700 mb-1">
-                                            Reference Description (Optional)
-                                        </label>
-                                        {{ form.reference_description }}
-                                    </div>
-                                </div>
-                                <!-- Special Instructions -->
-                                <div>
-                                    <label class="block text-sm font-medium text-gray-700 mb-2">Special Instructions (Optional)</label>
-                                    {{ form.special_instructions }}
-                                </div>
-                                
-                                <!-- Quantity -->
-                                <div>
-                                    <label class="block text-sm font-medium text-gray-700 mb-2">Quantity *</label>
-                                    {{ form.quantity }}
-                                    {% if form.quantity.errors %}
-                                    <p class="text-red-500 text-sm mt-1">{{ form.quantity.errors.0 }}</p>
-                                    {% endif %}
-                                </div>
+                                </ul>
                             </div>
+                            {% endif %}
                         </div>
-                        {% endwith %}
                         {% endfor %}
                     </div>
                 </div>
             </div>
-            {% endif %}
 
             <!-- Payment Method -->
             <div class="mb-8">
@@ -352,37 +226,34 @@
                         Payment Method
                     </h2>
                     
-                    <div class="space-y-4">
-                        <!-- Payment Options -->
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <!-- COD Option -->
-                            <label class="payment-option">
-                                <input type="radio" name="payment_method" value="cod" id="cod"
-                                       class="sr-only peer" {% if not order_form.payment_method.value or order_form.payment_method.value == 'cod' %}checked{% endif %}>
-                                <div class="border-2 border-gray-200 rounded-lg p-4 text-center cursor-pointer hover:border-[#8f3232] peer-checked:border-[#8f3232] peer-checked:bg-red-50">
-                                    <div class="w-12 h-12 mx-auto mb-2 rounded-full bg-red-100 flex items-center justify-center">
-                                        <svg class="w-6 h-6 text-[#8f3232]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z"/>
-                                        </svg>
-                                    </div>
-                                    <h3 class="font-semibold text-gray-800">Cash on Delivery</h3>
-                                    <p class="text-sm text-gray-600 mt-1">Pay when you receive</p>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <!-- COD Option -->
+                        <label class="payment-option">
+                            <input type="radio" name="payment_method" value="cod" id="cod"
+                                   class="sr-only peer" {% if not order_form.payment_method.value or order_form.payment_method.value == 'cod' %}checked{% endif %}>
+                            <div class="border-2 border-gray-200 rounded-lg p-4 text-center cursor-pointer hover:border-[#8f3232] peer-checked:border-[#8f3232] peer-checked:bg-red-50">
+                                <div class="w-12 h-12 mx-auto mb-2 rounded-full bg-red-100 flex items-center justify-center">
+                                    <svg class="w-6 h-6 text-[#8f3232]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z"/>
+                                    </svg>
                                 </div>
-                            </label>
+                                <h3 class="font-semibold text-gray-800">Cash on Delivery</h3>
+                                <p class="text-sm text-gray-600 mt-1">Pay when you receive</p>
+                            </div>
+                        </label>
 
-                            <!-- eSewa Option -->
-                            <label class="payment-option">
-                                <input type="radio" name="payment_method" value="esewa" id="esewa"
-                                       class="sr-only peer" {% if order_form.payment_method.value == 'esewa' %}checked{% endif %}>
-                                <div class="border-2 border-gray-200 rounded-lg p-4 text-center cursor-pointer hover:border-green-500 peer-checked:border-green-500 peer-checked:bg-green-50">
-                                    <div class="w-12 h-12 mx-auto mb-2 rounded-full bg-green-100 flex items-center justify-center">
-                                        <span class="text-xl font-bold text-green-600">Rs.</span>
-                                    </div>
-                                    <h3 class="font-semibold text-gray-800">Pay with eSewa</h3>
-                                    <p class="text-sm text-gray-600 mt-1">Secure online payment</p>
+                        <!-- eSewa Option -->
+                        <label class="payment-option">
+                            <input type="radio" name="payment_method" value="esewa" id="esewa"
+                                   class="sr-only peer" {% if order_form.payment_method.value == 'esewa' %}checked{% endif %}>
+                            <div class="border-2 border-gray-200 rounded-lg p-4 text-center cursor-pointer hover:border-green-500 peer-checked:border-green-500 peer-checked:bg-green-50">
+                                <div class="w-12 h-12 mx-auto mb-2 rounded-full bg-green-100 flex items-center justify-center">
+                                    <span class="text-xl font-bold text-green-600">Rs.</span>
                                 </div>
-                            </label>
-                        </div>
+                                <h3 class="font-semibold text-gray-800">Pay with eSewa</h3>
+                                <p class="text-sm text-gray-600 mt-1">Secure online payment</p>
+                            </div>
+                        </label>
                     </div>
                 </div>
             </div>
@@ -392,7 +263,7 @@
                 <div class="bg-white rounded-lg shadow-md p-6">
                     <h2 class="text-xl font-bold text-gray-800 mb-4 flex items-center">
                         <svg class="w-5 h-5 mr-2 text-[#8f3232]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 012-2h2a2 2 0 012 2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
                         </svg>
                         Order Summary
                     </h2>
@@ -435,7 +306,6 @@
                             </p>
                         </div>
                         
-                        <!-- Confirm Order Button -->
                         <button type="button" id="confirm-order-btn"
                                 class="bg-[#8f3232] hover:bg-[#7a2a2a] text-white px-8 py-3 rounded-lg font-medium text-lg transition">
                             Confirm Order
@@ -447,6 +317,7 @@
     </div>
 </div>
 
+<!-- Keep the existing JavaScript from before -->
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     console.log('DOM loaded, initializing checkout...');
@@ -721,8 +592,34 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 </script>
 
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Show any Django form errors as notifications
+    const formErrors = document.querySelectorAll('.text-red-500');
+    if (formErrors.length > 0) {
+        formErrors.forEach(error => {
+            const errorText = error.textContent.trim();
+            if (errorText && typeof showError === 'function') {
+                showError(errorText);
+            }
+        });
+    }
+
+    // Show Django messages as notifications
+    const messages = document.querySelectorAll('[data-message-type]');
+    messages.forEach(msgElement => {
+        const type = msgElement.getAttribute('data-message-type');
+        const text = msgElement.getAttribute('data-message-text');
+        if (text) {
+            if (typeof window[`show${type.charAt(0).toUpperCase() + type.slice(1)}`] === 'function') {
+                window[`show${type.charAt(0).toUpperCase() + type.slice(1)}`](text);
+            }
+        }
+    });
+});
+</script>
+
 <style>
-/* Custom styling */
 .delivery-option input:checked + div,
 .payment-option input:checked + div {
     border-color: #8f3232;
@@ -734,7 +631,6 @@ document.addEventListener('DOMContentLoaded', function() {
     background-color: rgba(16, 185, 129, 0.05);
 }
 
-/* Form field styling */
 select, input[type="text"], input[type="number"], input[type="date"], textarea {
     border: 1px solid #d1d5db;
     border-radius: 0.375rem;

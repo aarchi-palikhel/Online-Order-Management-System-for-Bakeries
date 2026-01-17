@@ -3,51 +3,146 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes">
+    <meta name="description" content="Live Bakery - Fresh Bakes Daily. Order custom cakes and baked goods online.">
+    <meta name="theme-color" content="#8B4513">
     <title>{% block title %}Live Bakery - Fresh Bakes Daily{% endblock %}</title>
    
     <!-- Favicon -->
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>LB</text></svg>">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🍰</text></svg>">
    
     <!-- CSRF Token for AJAX requests -->
     <meta name="csrf-token" content="{{ csrf_token }}">
    
     {% tailwind_css %}
     
-    <!-- Optional: Add any additional head scripts here -->
+    <!-- Mobile optimization styles -->
+    <style>
+        /* Prevent zoom on input focus (iOS) */
+        input, textarea, select {
+            font-size: 16px;
+        }
+        
+        /* Smooth scrolling */
+        html {
+            scroll-behavior: smooth;
+        }
+        
+        /* Touch-friendly tap targets (minimum 48px) */
+        button, a.btn, input[type="submit"], input[type="button"] {
+            min-height: 48px;
+            min-width: 48px;
+            padding: 12px 16px;
+        }
+        
+        /* Prevent horizontal scroll on mobile */
+        body {
+            overflow-x: hidden;
+        }
+        
+        /* Safe area for notched devices */
+        @supports (padding: max(0px)) {
+            body {
+                padding-left: max(0px, env(safe-area-inset-left));
+                padding-right: max(0px, env(safe-area-inset-right));
+            }
+        }
+
+        /* Notification animations */
+        @keyframes slide-in {
+            from {
+                transform: translateX(400px);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+
+        @keyframes slide-out {
+            from {
+                transform: translateX(0);
+                opacity: 1;
+            }
+            to {
+                transform: translateX(400px);
+                opacity: 0;
+            }
+        }
+
+        .animate-slide-in {
+            animation: slide-in 0.3s ease-out;
+        }
+
+        /* Notifications container positioning */
+        #notifications-container {
+            position: fixed;
+            top: 90px;
+            right: 16px;
+            z-index: 50;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            max-width: 384px;
+            pointer-events: none;
+        }
+
+        #notifications-container > * {
+            pointer-events: auto;
+        }
+
+        @media (max-width: 640px) {
+            #notifications-container {
+                left: 8px;
+                right: 8px;
+                max-width: calc(100% - 16px);
+                top: 75px;
+            }
+        }
+
+        @media (min-width: 641px) and (max-width: 1024px) {
+            #notifications-container {
+                top: 85px;
+            }
+        }
+    </style>
+    
     {% block extra_head %}{% endblock %}
 </head>
-<body class="bg-white min-h-screen flex flex-col">
+<body class="bg-white min-h-screen flex flex-col text-gray-900">
+    <!-- Skip to main content link (accessibility) -->
+    <a href="#main-content" class="sr-only focus:not-sr-only">Skip to main content</a>
+    
+    <!-- Notifications Container -->
+    <div id="notifications-container"></div>
+    
+    <!-- Session notification data (hidden) -->
+    {% if request.session.notification %}
+    <div id="session-notification" 
+         data-type="{{ request.session.notification.type }}"
+         data-message="{{ request.session.notification.message }}"
+         style="display:none;"></div>
+    {% endif %}
+    
     <!-- Include Navbar -->
     {% include 'partials/navbar.html' %}
-   
-    <!-- Messages -->
-    {% if messages %}
-    <div class="max-w-7xl mx-auto px-4 mt-4">
-        {% for message in messages %}
-        <div class="{% if message.tags == 'error' %}bg-red-100 border-red-400 text-red-700{% elif message.tags == 'warning' %}bg-yellow-100 border-yellow-400 text-yellow-700{% elif message.tags == 'success' %}bg-green-100 border-green-400 text-green-700{% else %}bg-blue-100 border-blue-400 text-blue-700{% endif %} border px-4 py-3 rounded mb-4">
-            {{ message }}
-        </div>
-        {% endfor %}
-    </div>
-    {% endif %}
-   
+    
     <!-- Main Content -->
-    <main class="flex-1">
+    <main class="flex-1 w-full" id="main-content">
         {% block content %}
         {% endblock %}
     </main>
-   
+    
     <!-- Include Footer -->
     {% include 'partials/footer.html' %}
 
-    <!-- Global JavaScript -->
-    <script src="{% static 'js/global.js' %}"></script>
+    <!-- Global JavaScript - Load in order -->
+    <script src="{% static 'js/notifications.js' %}" defer></script>
+    <script src="{% static 'js/global.js' %}" defer></script>
+    <script src="{% static 'js/cart.js' %}" defer></script>
     
-    <!-- Optional: Page-specific scripts -->
+    <!-- Page-specific scripts -->
     {% block extra_scripts %}{% endblock %}
-
-    <script src="{% static 'js/cart.js' %}"></script>
-
 </body>
 </html>

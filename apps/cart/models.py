@@ -40,14 +40,25 @@ class CartItem(models.Model):
     )
     quantity = models.PositiveIntegerField(default=1)
     added_at = models.DateTimeField(auto_now_add=True)
+    
+    # Foreign key to cake customization (optional - only for cake products)
+    cake_customization = models.ForeignKey(
+        'orders.CakeCustomization',
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name='cart_items'
+    )
 
     class Meta:
         ordering = ['-added_at']  
-        unique_together = ['cart', 'product']
+        unique_together = ['cart', 'product', 'cake_customization']
         verbose_name = 'Cart Item'
         verbose_name_plural = 'Cart Items'
 
     def __str__(self):
+        if self.cake_customization:
+            return f"{self.quantity} x {self.product.name} (Customized)"
         return f"{self.quantity} x {self.product.name}"
 
     @property

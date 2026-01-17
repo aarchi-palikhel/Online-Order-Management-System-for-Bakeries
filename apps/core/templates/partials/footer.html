@@ -1,30 +1,37 @@
-<!-- Simple Footer -->
-<footer class="bg-[#8f3232] text-white py-8 mt-auto">
-    <div class="max-w-7xl mx-auto px-4">
-        <div class="text-center">
-            <!-- Social Media Link -->
-            <div class="mb-4"> Connect with us on : <br>
-                <a 
-                    href="https://www.facebook.com/bhaktapurlivebakery/" 
-                    target="_blank" 
-                    rel="noopener noreferrer"
-                    class="inline-flex items-center justify-center w-10 h-10 bg-[#eec1ad] text-[#8f3232] rounded-full hover:bg-white transition-colors duration-200"
-                    aria-label="Visit our Facebook page"
-                >
-                    <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+<footer class="bg-[#8f3232] text-white py-4 sm:py-5 mt-auto">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div class="flex flex-col sm:flex-row items-center justify-between gap-6 sm:gap-8">
+            <!-- Quick Links (Left) -->
+            <div class="w-full sm:w-auto text-center sm:text-left">
+                <span class="text-sm sm:text-base font-medium text-[#eec1ad] block mb-2">Quick Links</span>
+                <ul class="flex flex-wrap justify-center sm:justify-start gap-2 sm:gap-4 text-xs sm:text-sm">
+                    <li><a href="{% url 'core:home' %}" class="text-[#eec1ad] hover:text-white transition">Home</a></li>
+                    <li class="hidden sm:block text-[#7a2a2a]">•</li>
+                    <li><a href="{% url 'products:product_list' %}" class="text-[#eec1ad] hover:text-white transition">Products</a></li>
+                    <li class="hidden sm:block text-[#7a2a2a]">•</li>
+                    <li><a href="{% url 'core:about' %}" class="text-[#eec1ad] hover:text-white transition">About</a></li>
+                    <li class="hidden sm:block text-[#7a2a2a]">•</li>
+                    <li><a href="{% url 'core:contact' %}" class="text-[#eec1ad] hover:text-white transition">Contact</a></li>
+                </ul>
+            </div>
+
+            <!-- Social (Right) -->
+            <div class="flex flex-col items-center sm:items-end gap-2">
+                <span class="text-xs sm:text-sm font-medium text-[#eec1ad]">Follow Us:</span>
+                <a href="https://www.facebook.com/bhaktapurlivebakery/" target="_blank" rel="noopener noreferrer" 
+                   class="inline-flex items-center justify-center w-8 h-8 bg-[#eec1ad] text-[#8f3232] rounded-full hover:bg-white hover:scale-110 transition-all" 
+                   aria-label="Facebook">
+                    <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
                         <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/>
                     </svg>
                 </a>
             </div>
-            
-            <!-- Copyright and Address -->
-            <p>&copy; 2025 Live Bakery. All rights reserved.</p>
-            <p class="text-[#eec1ad] mt-2">Kamalbinayak, Bhaktapur</p>
-            
-            <!-- Optional: Add a small call-to-action text -->
-            <p class="text-[#eec1ad] text-sm mt-2">
-                Follow us for updates and special offers!
-            </p>
+        </div>
+
+        <!-- Bottom Line -->
+        <div class="border-t border-[#7a2a2a] mt-4 pt-2">
+            <p class="text-center text-xs sm:text-sm text-[#eec1ad]">Follow us for more updates !</p>
+            <p class="text-center text-xs sm:text-sm text-[#eec1ad]">&copy; 2025 Live Bakery | Kamalbinayak, Bhaktapur</p>
         </div>
     </div>
 </footer>

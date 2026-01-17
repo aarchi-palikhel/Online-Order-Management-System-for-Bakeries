@@ -505,3 +505,58 @@ class SuccessfulOrders:
                 'end_date': end_date
             }
         }
+
+
+class CakeCustomization(models.Model):
+    """Model for storing cake customization details"""
+    
+    id = models.BigAutoField(primary_key=True)
+    
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='cake_customizations'
+    )
+    
+    product = models.ForeignKey(
+        Product,
+        on_delete=models.CASCADE,
+        related_name='customizations'
+    )
+    
+    # Customization fields
+    cake_flavor = models.CharField(max_length=100, blank=True)
+    cake_custom_flavor = models.CharField(max_length=200, blank=True)
+    cake_weight = models.CharField(max_length=50, blank=True)
+    cake_custom_weight = models.CharField(max_length=50, blank=True)
+    cake_tiers = models.IntegerField(default=1)
+    message_on_cake = models.CharField(max_length=100, blank=True)
+    delivery_date = models.DateField(null=True, blank=True)
+    special_instructions = models.TextField(blank=True)
+    
+    # Reference image
+    reference_image = models.ImageField(
+        upload_to='cake_designs/%Y/%m/%d/',
+        null=True,
+        blank=True
+    )
+    reference_title = models.CharField(max_length=200, blank=True)
+    reference_description = models.TextField(blank=True)
+    
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        ordering = ['-created_at']
+        verbose_name = 'Cake Customization'
+        verbose_name_plural = 'Cake Customizations'
+    
+    def __str__(self):
+        return f"Customization #{self.id} - {self.product.name}"
+    
+    @property
+    def display_weight(self):
+        """Display cake weight with custom weight if applicable"""
+        if self.cake_weight == 'custom' and self.cake_custom_weight:
+            return f"Custom: {self.cake_custom_weight} lb"
+        return self.cake_weight + " lb" if self.cake_weight else "Not specified"

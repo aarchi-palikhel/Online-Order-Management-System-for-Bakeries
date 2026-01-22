@@ -5,6 +5,11 @@
 
 {% block content %}
 <div class="max-w-4xl mx-auto my-8 px-4">
+     {% if messages %}
+        {% for message in messages %}
+        <div data-message-type="{% if message.tags %}{{ message.tags }}{% else %}info{% endif %}" data-message-text="{{ message }}" style="display:none;"></div>
+        {% endfor %}
+    {% endif %}
     <!-- Success Header -->
     <div class="text-center mb-8">
         <div class="w-20 h-20 mx-auto mb-4 rounded-full bg-green-100 flex items-center justify-center">

@@ -579,6 +579,11 @@ def order_confirmation(request, order_id):
 @customer_required
 def order_list(request):
     """Display user's order history"""
+    # Clear any stale messages from order creation/confirmation FIRST
+    from django.contrib.messages import get_messages
+    storage = get_messages(request)
+    storage.used = True
+    
     # Get all orders for the user
     all_orders = Order.objects.filter(user=request.user).select_related('user').order_by('-created_at')
     

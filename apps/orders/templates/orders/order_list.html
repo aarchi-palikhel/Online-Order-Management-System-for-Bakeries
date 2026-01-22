@@ -10,14 +10,6 @@
         <h1 class="text-3xl font-bold text-[#8f3232] mb-2">My Orders</h1>
         <p class="text-gray-600">View and manage your orders</p>
     </div>
-
-    <!-- Hidden message elements-->
-    {% if messages %}
-        {% for message in messages %}
-        <div data-message-type="{% if message.tags %}{{ message.tags }}{% else %}info{% endif %}" data-message-text="{{ message }}" style="display:none;"></div>
-        {% endfor %}
-    {% endif %}
-
     <!-- Order Stats -->
     <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
         <!-- Total Orders -->

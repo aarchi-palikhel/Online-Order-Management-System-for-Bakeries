@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Login Notification - {{ bakery_name }}</title>
+    <title>Welcome to {{ bakery_name }}</title>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -25,6 +25,12 @@
             padding: 30px;
             border-radius: 0 0 8px 8px;
         }
+        .welcome-box {
+            background-color: #e8f5e8;
+            border-left: 4px solid #4caf50;
+            padding: 15px;
+            margin: 20px 0;
+        }
         .info-box {
             background-color: #e8f4fd;
             border-left: 4px solid #2196F3;
@@ -45,18 +51,27 @@
             padding: 15px;
             margin: 20px 0;
         }
+        .emoji {
+            font-size: 24px;
+            margin-right: 10px;
+        }
     </style>
 </head>
 <body>
     <div class="header">
         <h1>{{ bakery_name }}</h1>
-        <h2>Login Notification</h2>
+        <h2>🎉 Welcome to Our Bakery Family!</h2>
     </div>
     
     <div class="content">
         <p>Hello {{ customer_name }},</p>
         
-        <p>We wanted to let you know that your account was successfully accessed.</p>
+        <div class="welcome-box">
+            <h3><span class="emoji">🍰</span>Welcome to {{ bakery_name }}!</h3>
+            <p>Thank you for joining our bakery family! We're excited to serve you with our freshly baked goods and delicious treats.</p>
+        </div>
+        
+        <p>Your account has been successfully accessed for the first time. Here are the details of your login:</p>
         
         <div class="info-box">
             <h3>Login Details:</h3>
@@ -67,19 +82,30 @@
             </ul>
         </div>
         
+        <div class="welcome-box">
+            <h3><span class="emoji">🛍️</span>What's Next?</h3>
+            <ul>
+                <li>Browse our delicious collection of cakes, pastries, and baked goods</li>
+                <li>Customize your own cake for special occasions</li>
+                <li>Enjoy convenient delivery to your doorstep</li>
+                <li>Stay updated with our latest offerings and special deals</li>
+            </ul>
+        </div>
+        
         <div class="security-notice">
             <h3>🔒 Security Notice</h3>
             <p>If this wasn't you, please contact us immediately and consider changing your password.</p>
         </div>
         
-        <p>Thank you for choosing {{ bakery_name }}!</p>
+        <p>We look forward to serving you the finest baked goods in Kamalbinayak, Bhaktapur!</p>
         
         <p>Best regards,<br>
         The {{ bakery_name }} Team</p>
     </div>
     
     <div class="footer">
-        <p>This is an automated security notification from {{ bakery_name }}.</p>
+        <p>This is a welcome notification from {{ bakery_name }}.</p>
+        <p>Located in Kamalbinayak, Bhaktapur | Fresh bakes daily</p>
         <p>If you have any questions, please contact our support team.</p>
     </div>
 </body>

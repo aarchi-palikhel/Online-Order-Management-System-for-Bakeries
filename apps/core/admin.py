@@ -99,11 +99,83 @@ class ContactMessageAdmin(ModelAdmin):
     def reply_actions(self, obj):
         if obj.pk:
             return format_html(
-                '<span style="color: #666;">View Only</span>'
+                '<a class="button" href="{}">Quick Reply</a>',
+                reverse('admin:quick_reply_contact', args=[obj.pk])
             )
         return '-'
     reply_actions.short_description = 'Actions'
     reply_actions.allow_tags = True
+    
+    def get_urls(self):
+        from django.urls import path
+        urls = super().get_urls()
+        custom_urls = [
+            path(
+                '<int:contact_id>/quick-reply/',
+                self.admin_site.admin_view(self.quick_reply_view),
+                name='quick_reply_contact',
+            ),
+            path(
+                'reply/<int:reply_id>/send-email/',
+                self.admin_site.admin_view(self.send_reply_email),
+                name='send_reply_email',
+            ),
+        ]
+        return custom_urls + urls
+    
+    def quick_reply_view(self, request, contact_id):
+        from django.shortcuts import render
+        
+        contact_message = get_object_or_404(ContactMessage, pk=contact_id)
+        
+        if request.method == 'POST':
+            reply_text = request.POST.get('reply_message', '').strip()
+            send_email = request.POST.get('send_email') == 'on'
+            
+            if reply_text:
+                # Create the reply
+                reply = ContactMessageReply.objects.create(
+                    contact_message=contact_message,
+                    admin_user=request.user,
+                    reply_message=reply_text
+                )
+                
+                # Send email if requested
+                if send_email:
+                    if reply.send_email():
+                        messages.success(request, 'Reply sent successfully and email delivered!')
+                    else:
+                        messages.warning(request, 'Reply saved but email could not be sent.')
+                else:
+                    messages.success(request, 'Reply saved successfully!')
+                    # Mark as replied even if email not sent
+                    contact_message.mark_as_replied()
+                
+                return HttpResponseRedirect(
+                    reverse('admin:core_contactmessage_change', args=[contact_id])
+                )
+            else:
+                messages.error(request, 'Reply message cannot be empty.')
+        
+        context = {
+            'contact_message': contact_message,
+            'title': f'Quick Reply to {contact_message.full_name}',
+            'opts': self.model._meta,
+        }
+        
+        return render(request, 'admin/core/quick_reply.html', context)
+    
+    def send_reply_email(self, request, reply_id):
+        reply = get_object_or_404(ContactMessageReply, pk=reply_id)
+        
+        if reply.send_email():
+            messages.success(request, 'Email sent successfully!')
+        else:
+            messages.error(request, 'Failed to send email.')
+        
+        return HttpResponseRedirect(
+            reverse('admin:core_contactmessage_change', args=[reply.contact_message.pk])
+        )
 
 
 @admin.register(ContactMessageReply)
@@ -149,13 +221,17 @@ class ContactMessageReplyAdmin(ModelAdmin):
         return self.readonly_fields
     
     def email_actions(self, obj):
-        if obj.email_sent:
+        if obj.pk and not obj.email_sent:
+            return format_html(
+                '<a class="button" href="{}">Send Email</a>',
+                reverse('admin:send_reply_email', args=[obj.pk])
+            )
+        elif obj.email_sent:
             return format_html(
                 '<span style="color: green;">✓ Sent on {}</span>',
                 obj.email_sent_at.strftime('%Y-%m-%d %H:%M') if obj.email_sent_at else 'Unknown'
             )
-        else:
-            return format_html('<span style="color: #999;">Not sent</span>')
+        return '-'
     email_actions.short_description = 'Email Status'
     email_actions.allow_tags = True
     

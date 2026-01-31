@@ -84,6 +84,12 @@ class CustomUser(AbstractUser):
         help_text=_('Default delivery address for customers')
     )
     
+    first_login_completed = models.BooleanField(
+        _('first login completed'),
+        default=False,
+        help_text=_('Tracks whether user has completed their first login')
+    )
+    
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     

@@ -33,7 +33,7 @@ def send_login_notification_email(user, request):
         'bakery_name': 'Live Bakery',
     }
     
-    subject = "Login Notification - Live Bakery"
+    subject = "Welcome to Live Bakery - First Login Notification"
     
     return send_template_email(
         to_email=user.email,
@@ -97,9 +97,11 @@ def custom_login(request):
                     
                     first_name = user.first_name if user.first_name else user.username
                     
-                    # Send login notification email (only if user has email and remember me is not checked)
+                    # Send login notification email only for first-time logins (and only if user has email and remember me is not checked)
                     email_sent = False
-                    if not remember_me and user.email:
+                    is_first_login = not user.first_login_completed
+                    
+                    if not remember_me and user.email and is_first_login:
                         # Check if we already sent a login email recently to prevent duplicates
                         import time
                         
@@ -114,29 +116,37 @@ def custom_login(request):
                                 # Record the time we sent the email
                                 request.session[login_email_sent_key] = current_time
                     
+                    # Mark first login as completed
+                    if is_first_login:
+                        user.first_login_completed = True
+                        user.save(update_fields=['first_login_completed'])
+                    
                     # Redirect based on user type
                     if user.user_type == 'owner' or user.is_superuser:
-                        message = f'Welcome back, {first_name}! (Owner)'
-                        if email_sent:
-                            message += ' A login notification has been sent to your email.'
+                        if is_first_login:
+                            message = f'Welcome to Live Bakery, {first_name}! (Owner)'
+                        else:
+                            message = f'Welcome back, {first_name}! (Owner)'
                         request.session['notification'] = {
                             'type': 'info',
                             'message': message
                         }
                         response = redirect('admin:index')
                     elif user.user_type == 'staff':
-                        message = f'Welcome back, {first_name}! (Staff)'
-                        if email_sent:
-                            message += ' A login notification has been sent to your email.'
+                        if is_first_login:
+                            message = f'Welcome to Live Bakery, {first_name}! (Staff)'
+                        else:
+                            message = f'Welcome back, {first_name}! (Staff)'
                         request.session['notification'] = {
                             'type': 'info',
                             'message': message
                         }
                         response = redirect('admin:index')
                     else:
-                        message = f'Welcome back, {first_name}! 🎉'
-                        if email_sent:
-                            message += ' A login notification has been sent to your email.'
+                        if is_first_login:
+                            message = f'Welcome to Live Bakery, {first_name}! 🎉'
+                        else:
+                            message = f'Welcome back, {first_name}! 🎉'
                         request.session['notification'] = {
                             'type': 'success',
                             'message': message

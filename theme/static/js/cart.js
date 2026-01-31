@@ -1,5 +1,9 @@
 console.log('Cart JS loaded');
 
+// Add debugging
+console.log('Cart JS: Setting up debugging');
+window.cartDebug = true;
+
 // Listen for cart updates from product_detail.js
 document.addEventListener('cartUpdated', function(event) {
     console.log('Cart update event received:', event.detail);
@@ -215,6 +219,7 @@ function updateCartTotals(data) {
 
 // Remove item with smooth animation
 async function removeItem(form) {
+    console.log('removeItem called');
     const cartItem = form.closest('.cart-item');
     const button = form.querySelector('[type="submit"]');
     const originalHTML = button.innerHTML;
@@ -224,6 +229,7 @@ async function removeItem(form) {
     const csrfToken = document.querySelector('[name="csrfmiddlewaretoken"]')?.value;
     
     try {
+        console.log('Making AJAX request to:', form.action);
         const response = await fetch(form.action, {
             method: 'POST',
             headers: {
@@ -233,6 +239,7 @@ async function removeItem(form) {
             body: new FormData(form)
         });
         
+        console.log('Response status:', response.status);
         const data = await response.json();
         console.log('Remove item response:', data);
         
@@ -249,12 +256,13 @@ async function removeItem(form) {
                 updateCartTotals(data);
                 
                 // Check if this was the last item
+                console.log('Checking if cart is empty. Total items:', data.total_items);
                 if (data.total_items === 0) {
-                    // Fade out the cart and show empty state
-                    console.log('Cart is now empty, showing empty state');
+                    // Show success and redirect to cart page to show empty state
+                    showSuccess(data.message || 'Item removed from cart');
                     setTimeout(() => {
-                        fadeOutCartShowEmpty();
-                    }, 300);
+                        window.location.href = '/cart/';
+                    }, 1000);
                 } else {
                     // Show success message
                     showSuccess(data.message || 'Item removed from cart');
@@ -275,6 +283,7 @@ async function removeItem(form) {
 
 // Clear cart with smooth animation
 async function clearCart(form) {
+    console.log('clearCart called');
     const button = form.querySelector('[type="submit"]');
     const originalText = button.textContent;
     button.textContent = 'Clearing...';
@@ -288,8 +297,10 @@ async function clearCart(form) {
     }
     
     const csrfToken = document.querySelector('[name="csrfmiddlewaretoken"]')?.value;
+    console.log('CSRF Token found:', !!csrfToken);
     
     try {
+        console.log('Making AJAX request to:', form.action);
         const response = await fetch(form.action, {
             method: 'POST',
             headers: {
@@ -299,31 +310,26 @@ async function clearCart(form) {
             body: new FormData(form)
         });
         
+        console.log('Response status:', response.status);
         const data = await response.json();
+        console.log('Clear cart response:', data);
         
         if (data.success) {
-            // Fade out all cart items
-            const cartItems = document.querySelectorAll('.cart-item');
-            cartItems.forEach((item, index) => {
-                setTimeout(() => {
-                    item.style.opacity = '0';
-                    item.style.transform = 'translateX(-20px)';
-                    item.style.transition = 'all 0.3s ease';
-                }, index * 100);
-            });
+            // Update cart totals immediately
+            updateCartTotals(data);
             
-            // Show empty state after animation
+            // Show success and redirect to cart page
+            showSuccess(data.message || 'Cart cleared');
             setTimeout(() => {
-                updateCartTotals(data);
-                fadeOutCartShowEmpty();
-            }, cartItems.length * 100 + 300);
+                window.location.href = '/cart/';
+            }, 1000);
         } else {
             showError(data.message || 'Failed to clear cart');
             button.textContent = originalText;
             button.disabled = false;
         }
     } catch (error) {
-        console.error('Error:', error);
+        console.error('Error clearing cart:', error);
         showError('An error occurred: ' + error.message);
         button.textContent = originalText;
         button.disabled = false;
@@ -332,43 +338,26 @@ async function clearCart(form) {
 
 // Fade out cart and show empty state
 function fadeOutCartShowEmpty() {
-    const gridContainer = document.querySelector('.grid.lg\\:grid-cols-3');
+    console.log('fadeOutCartShowEmpty called - showing empty state');
     
-    if (gridContainer) {
-        // Fade out the grid
-        gridContainer.style.opacity = '0';
-        gridContainer.style.transition = 'opacity 0.4s ease';
-        
-        setTimeout(() => {
-            // Replace with empty state HTML
-            const emptyStateHTML = `
-                <div class="text-center py-12">
-                    <div class="w-24 h-24 mx-auto mb-4 bg-gray-100 rounded-full flex items-center justify-center">
-                        <span class="text-3xl">🛒</span>
-                    </div>
-                    <h3 class="text-xl font-semibold text-gray-700 mb-2">Your cart is empty</h3>
-                    <p class="text-gray-600 mb-6">Add some delicious bakery items to get started!</p>
-                    <a href="/products/" class="bg-[#8f3232] text-white px-6 py-3 rounded-lg font-medium hover:bg-[#7a2a2a] inline-block transition">
-                        Start Shopping
-                    </a>
-                </div>
-            `;
-            
-            gridContainer.innerHTML = emptyStateHTML;
-            gridContainer.style.opacity = '1';
-            gridContainer.style.transition = 'opacity 0.4s ease';
-            
-            showSuccess('Cart cleared');
-        }, 400);
-    } else {
-        // Fallback: reload the page
-        location.reload();
-    }
+    // Simple approach: just reload the page to show the empty state
+    // This ensures we get the proper server-rendered empty state
+    showSuccess('Cart cleared');
+    setTimeout(() => {
+        window.location.reload();
+    }, 1000);
 }
 
 // Setup event listeners
 function setupCart() {
     console.log('Setting up cart event listeners');
+    
+    // Add debugging for clear cart form
+    const clearCartForm = document.getElementById('clear-cart-form');
+    console.log('Clear cart form found:', !!clearCartForm);
+    if (clearCartForm) {
+        console.log('Clear cart form action:', clearCartForm.action);
+    }
     
     // Quantity buttons - direct event listeners
     document.querySelectorAll('.quantity-minus').forEach(btn => {
@@ -399,15 +388,16 @@ function setupCart() {
     document.querySelectorAll('.remove-cart-form').forEach(form => {
         form.addEventListener('submit', function(e) {
             e.preventDefault();
+            console.log('Remove form submitted:', this);
             removeItem(this);
         });
     });
     
     // Clear cart
-    const clearCartForm = document.getElementById('clear-cart-form');
     if (clearCartForm) {
         clearCartForm.addEventListener('submit', function(e) {
             e.preventDefault();
+            console.log('Clear cart form submitted:', this);
             clearCart(this);
         });
     }

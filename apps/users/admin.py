@@ -24,8 +24,8 @@ def is_staff_user(request):
 # ==================== CUSTOM USER ADMIN ====================
 @admin.register(CustomUser)
 class CustomUserAdmin(UserAdmin):
-    list_display = ['username', 'email', 'mobile_no', 'user_type', 'first_name', 'last_name', 'is_active', 'date_joined']
-    list_filter = ['user_type', 'is_active', 'date_joined']
+    list_display = ['username', 'email', 'mobile_no', 'user_type', 'first_name', 'last_name', 'is_active', 'first_login_completed', 'date_joined']
+    list_filter = ['user_type', 'is_active', 'first_login_completed', 'date_joined']
     search_fields = ['username', 'email', 'mobile_no', 'first_name', 'last_name']
     ordering = ['-date_joined']
     
@@ -42,6 +42,9 @@ class CustomUserAdmin(UserAdmin):
         ('Role & Permissions', {
             'fields': ('user_type', 'is_active', 'is_superuser', 'groups', 'user_permissions')
         }),
+        ('Login Status', {
+            'fields': ('first_login_completed',)
+        }),
         ('Important dates', {
             'fields': ('last_login', 'date_joined')
         }),
@@ -54,7 +57,7 @@ class CustomUserAdmin(UserAdmin):
         }),
     )
     
-    readonly_fields = ['last_login', 'date_joined']
+    readonly_fields = ['last_login', 'date_joined', 'first_login_completed']
     
     # ========== PERMISSION METHODS ==========
     

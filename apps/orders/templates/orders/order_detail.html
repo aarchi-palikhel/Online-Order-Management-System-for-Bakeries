@@ -43,8 +43,8 @@
                         {% for item in order_items %}
                         <div class="flex items-start border-b border-gray-100 pb-6 last:border-0 last:pb-0">
                             <div class="w-20 h-20 rounded-lg overflow-hidden mr-4 shrink-0">
-                                {% if item.product.images.exists %}
-                                <img src="{{ item.product.images.first.image.url }}" 
+                                {% if item.product.image %}
+                                <img src="{{ item.product.image.url }}" 
                                      alt="{{ item.product.name }}"
                                      class="w-full h-full object-cover">
                                 {% else %}

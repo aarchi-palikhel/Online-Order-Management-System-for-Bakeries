@@ -3,9 +3,6 @@
 {% load orders_filters %}
 {% block title %}Checkout - Live Bakery{% endblock %}
 
-{% block extra_head %}
-<script src="{% static 'js/order_checkout.js' %}"></script>
-{% endblock %}
 
 {% block content %}
 <div class="max-w-4xl mx-auto my-8 px-4">
@@ -212,7 +209,7 @@
                             <div class="mt-2 text-sm text-gray-600">
                                 <p class="font-medium">Delivery Charges:</p>
                                 <ul class="list-disc pl-5 mt-1">
-                                    <li>Kamalbinayak: Rs. 20</li>
+                                    <li>Kamalbinayak: Free</li>
                                     <li>Bhaktapur (outside Kamalbinayak): Rs. 50</li>
                                     <li>Outside Bhaktapur: Rs. 100</li>
                                 </ul>
@@ -237,8 +234,8 @@
                         <div class="border border-gray-200 rounded-lg p-4">
                             <div class="flex items-center mb-3">
                                 <div class="w-16 h-16 rounded-lg overflow-hidden mr-4">
-                                    {% if cart_item.product.images.exists %}
-                                    <img src="{{ cart_item.product.images.first.image.url }}" 
+                                    {% if cart_item.product.image %}
+                                    <img src="{{ cart_item.product.image.url }}" 
                                          alt="{{ cart_item.product.name }}"
                                          class="w-full h-full object-cover">
                                     {% else %}
@@ -417,7 +414,7 @@ document.addEventListener('DOMContentLoaded', function() {
         
         // Match this logic with your backend calculate_delivery_fee() function
         if (addressLower.includes('kamalbinayak')) {
-            return 20; // Rs. 20 for Kamalbinayak
+            return 0; // Free delivery for Kamalbinayak
         } else if (addressLower.includes('bhaktapur')) {
             return 50; // Rs. 50 for Bhaktapur (outside Kamalbinayak)
         } else {
@@ -755,6 +752,8 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
 });
+
+console.log('Order checkout JS loaded');
 </script>
 
 <style>

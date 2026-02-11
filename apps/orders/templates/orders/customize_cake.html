@@ -27,8 +27,8 @@
                     
                     <!-- Cake Image -->
                     <div class="h-48 bg-linear-to-br rounded-lg flex items-center justify-center mb-6 overflow-hidden">
-                        {% if product.images.exists %}
-                            <img src="{{ product.images.first.image.url }}" 
+                        {% if product.image %}
+                            <img src="{{ product.image.url }}" 
                                  alt="{{ product.name }}" 
                                  class="max-w-full max-h-40 object-contain rounded-lg">
                         {% else %}

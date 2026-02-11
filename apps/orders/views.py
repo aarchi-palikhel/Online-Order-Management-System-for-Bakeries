@@ -146,9 +146,9 @@ def calculate_delivery_fee(address):
     
     address_lower = address.lower()
     
-    # Check for Kamalbinayak (Rs. 20)
+    # Check for Kamalbinayak (Free delivery)
     if 'kamalbinayak' in address_lower:
-        return 20
+        return 0
     
     # Check for Bhaktapur (Rs. 50)
     if 'bhaktapur' in address_lower:

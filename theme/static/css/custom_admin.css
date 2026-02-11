@@ -1,0 +1,147 @@
+/* Custom Admin Styles - Fix Input Field Borders */
+
+/* Make input field borders more visible */
+.form-row input[type="text"],
+.form-row input[type="email"],
+.form-row input[type="password"],
+.form-row input[type="number"],
+.form-row input[type="url"],
+.form-row input[type="tel"],
+.form-row textarea,
+.form-row select {
+    border: 1px solid #d1d5db !important;
+    border-radius: 4px !important;
+    padding: 8px 12px !important;
+    background-color: #ffffff !important;
+    transition: border-color 0.2s ease !important;
+}
+
+/* Focus state for better visibility */
+.form-row input[type="text"]:focus,
+.form-row input[type="email"]:focus,
+.form-row input[type="password"]:focus,
+.form-row input[type="number"]:focus,
+.form-row input[type="url"]:focus,
+.form-row input[type="tel"]:focus,
+.form-row textarea:focus,
+.form-row select:focus {
+    border-color: #3b82f6 !important;
+    outline: none !important;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1) !important;
+}
+
+/* Placeholder text styling */
+.form-row input::placeholder,
+.form-row textarea::placeholder {
+    color: #9ca3af !important;
+    opacity: 1 !important;
+}
+
+/* Inline form fields (for product images, etc.) */
+.inline-related input[type="text"],
+.inline-related input[type="number"],
+.inline-related textarea,
+.inline-related select {
+    border: 1px solid #d1d5db !important;
+    border-radius: 4px !important;
+    padding: 6px 10px !important;
+    background-color: #ffffff !important;
+}
+
+.inline-related input[type="text"]:focus,
+.inline-related input[type="number"]:focus,
+.inline-related textarea:focus,
+.inline-related select:focus {
+    border-color: #3b82f6 !important;
+    outline: none !important;
+    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1) !important;
+}
+
+/* File input styling */
+.form-row input[type="file"] {
+    border: 1px solid #d1d5db !important;
+    border-radius: 4px !important;
+    padding: 8px 12px !important;
+    background-color: #f9fafb !important;
+}
+
+/* Checkbox and radio button containers */
+.form-row input[type="checkbox"],
+.form-row input[type="radio"] {
+    border: 1px solid #d1d5db !important;
+    width: 18px !important;
+    height: 18px !important;
+}
+
+/* Inline tabular forms */
+.tabular input[type="text"],
+.tabular input[type="number"],
+.tabular textarea {
+    border: 1px solid #d1d5db !important;
+    border-radius: 4px !important;
+    padding: 6px 10px !important;
+    min-height: 32px !important;
+}
+
+/* Error state */
+.form-row.errors input,
+.form-row.errors textarea,
+.form-row.errors select {
+    border-color: #ef4444 !important;
+}
+
+/* Disabled state */
+.form-row input:disabled,
+.form-row textarea:disabled,
+.form-row select:disabled {
+    background-color: #f3f4f6 !important;
+    border-color: #e5e7eb !important;
+    cursor: not-allowed !important;
+    opacity: 0.6 !important;
+}
+
+/* Unfold specific overrides */
+.dark .form-row input[type="text"],
+.dark .form-row input[type="email"],
+.dark .form-row input[type="password"],
+.dark .form-row input[type="number"],
+.dark .form-row textarea,
+.dark .form-row select {
+    border: 1px solid #4b5563 !important;
+    background-color: #1f2937 !important;
+    color: #f9fafb !important;
+}
+
+.dark .form-row input::placeholder,
+.dark .form-row textarea::placeholder {
+    color: #6b7280 !important;
+}
+
+/* Add some spacing for better readability */
+.form-row {
+    margin-bottom: 16px !important;
+}
+
+/* Make labels more prominent */
+.form-row label {
+    font-weight: 500 !important;
+    margin-bottom: 6px !important;
+    display: block !important;
+    color: #374151 !important;
+}
+
+.dark .form-row label {
+    color: #e5e7eb !important;
+}
+
+/* Help text styling */
+.form-row .help {
+    color: #6b7280 !important;
+    font-size: 0.875rem !important;
+    margin-top: 4px !important;
+}
+
+/* Required field indicator */
+.form-row .required {
+    color: #ef4444 !important;
+}

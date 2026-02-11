@@ -1,4 +1,3 @@
-# utils/invoice_generator.py
 from io import BytesIO
 from reportlab.lib.pagesizes import letter
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image
@@ -13,15 +12,14 @@ class InvoiceGenerator:
     def __init__(self, order):
         self.order = order
         self.buffer = BytesIO()
-        # Reduce margins to fit more content on one page
         self.doc = SimpleDocTemplate(
             self.buffer,
             pagesize=letter,
-            rightMargin=36,    # Reduced from 72
-            leftMargin=36,     # Reduced from 72
-            topMargin=36,      # Reduced from 72
-            bottomMargin=36,   # Reduced from 72
-            title=f"Live Bakery Invoice {order.order_number}"  # Set PDF title
+            rightMargin=36,    
+            leftMargin=36, 
+            topMargin=36,    
+            bottomMargin=36,  
+            title=f"Live Bakery Invoice {order.order_number}"  
         )
         self.styles = getSampleStyleSheet()
         self.story = []
@@ -31,20 +29,17 @@ class InvoiceGenerator:
         
         logo_path = finders.find('images/logo.png')
         
-        # Prepare header content
         header_cells = []
         
-        # Left cell: Logo and company info
+        # Logo and company info
         left_content = []
         if logo_path:
             try:
-                # Reduce logo size to save space
                 logo = Image(logo_path, width=1.0*inch, height=1.0*inch)
                 left_content.append(logo)
             except Exception as e:
                 print(f"Logo loading failed: {e}")
         
-        # Add company details with smaller font
         company_info = [
             Paragraph("Live Bakery", ParagraphStyle(
                 'CompanyName',
@@ -64,7 +59,7 @@ class InvoiceGenerator:
         for item in company_info:
             left_content.append(item)
         
-        # Right cell: Invoice title and details with smaller font
+        # Invoice title and details with smaller font
         right_content = [
             Paragraph("INVOICE", ParagraphStyle(
                 'InvoiceTitle',
@@ -118,12 +113,11 @@ class InvoiceGenerator:
     def _add_customer_and_invoice_info(self):
         """Combine customer info and invoice details to save space"""
         
-        # Get customer name
         customer_name = self.order.user.get_full_name() 
         if not customer_name or customer_name == '':
             customer_name = self.order.user.username
         
-        # Create a table with 3 sections: Company, Customer, Invoice Details
+        # Table with: Company, Customer, Invoice Details
         info_data = [
             ["BILL FROM:", "BILL TO:", "INVOICE DETAILS"],
             ["Live Bakery", f"{customer_name}", f"Invoice #: {self.order.order_number}"],
@@ -178,7 +172,7 @@ class InvoiceGenerator:
             subtotal += item_total
             
             # Truncate long product names if necessary
-            if len(product_name) > 25:  # Reduced from 30
+            if len(product_name) > 25:
                 product_name = product_name[:22] + "..."
             
             items_data.append([
@@ -194,15 +188,14 @@ class InvoiceGenerator:
             delivery_address = self.order.delivery_address.lower()
             
             if 'kamalbinayak' in delivery_address:
-                delivery_fee = 20
+                delivery_fee = 0
             elif 'bhaktapur' in delivery_address:
                 delivery_fee = 50
             else:
                 delivery_fee = 100
         
         grand_total = subtotal + delivery_fee
-        
-        # Add summary rows with less spacing
+
         items_data.append(["", "", "Subtotal:", f"Rs. {subtotal:.2f}"])
         items_data.append(["", "", "Delivery Fee:", f"Rs. {delivery_fee:.2f}"])
         items_data.append(["", "", "TOTAL:", f"Rs. {grand_total:.2f}"])

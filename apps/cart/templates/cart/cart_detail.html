@@ -165,8 +165,8 @@
                     <div class="cart-item-wrapper">
                         <!-- Product Image -->
                         <div class="cart-item-image w-24 h-24 rounded-lg overflow-hidden bg-gray-100 shrink-0">
-                            {% if item.product.images.exists %}
-                                <img src="{{ item.product.images.first.image.url }}" 
+                            {% if item.product.image %}
+                                <img src="{{ item.product.image.url }}" 
                                      alt="{{ item.product.name }}"
                                      class="w-full h-full object-cover">
                             {% else %}

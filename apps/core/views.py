@@ -29,7 +29,7 @@ def home(request):
     featured_products = Product.objects.filter(
         is_featured=True, 
         available=True
-    ).prefetch_related('images').order_by('-created_at')[:8]  # Limit to 8 featured products
+    ).select_related('category').order_by('-created_at')[:8]  # Limit to 8 featured products
     
     context = {
         'featured_products': featured_products,
@@ -175,63 +175,145 @@ def dashboard_callback(request, context):
 def dashboard_api(request):
     """API endpoint for dashboard data"""
     try:
-        # Get date range for last 30 days
-        end_date = timezone.now()
-        start_date = end_date - timedelta(days=30)
+        # Get time period filter (default to current month)
+        time_period = request.GET.get('period', 'current_month')
+        selected_month = request.GET.get('month', None)  # Format: YYYY-MM
+        selected_year = request.GET.get('year', None)    # Format: YYYY
         
-        # Basic statistics
-        total_orders = Order.objects.count()
-        total_revenue = Order.objects.filter(payment_status='paid').aggregate(
-            total=Sum('total_amount')
-        )['total'] or 0
+        # Calculate date range based on period
+        end_date = timezone.now()
+        
+        if time_period == 'yearly' and selected_year:
+            # Specific year data
+            start_date = timezone.datetime(int(selected_year), 1, 1, tzinfo=timezone.get_current_timezone())
+            end_date = timezone.datetime(int(selected_year), 12, 31, 23, 59, 59, tzinfo=timezone.get_current_timezone())
+        elif time_period == 'monthly' and selected_month:
+            # Specific month data (format: YYYY-MM)
+            year, month = map(int, selected_month.split('-'))
+            start_date = timezone.datetime(year, month, 1, tzinfo=timezone.get_current_timezone())
+            # Get last day of the month
+            if month == 12:
+                end_date = timezone.datetime(year, 12, 31, 23, 59, 59, tzinfo=timezone.get_current_timezone())
+            else:
+                end_date = timezone.datetime(year, month + 1, 1, tzinfo=timezone.get_current_timezone()) - timedelta(seconds=1)
+        else:
+            # Default: Current month
+            start_date = end_date.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+            # End date is now
+            end_date = timezone.now()
+        
+        # Basic statistics (filtered by time period)
+        total_orders = Order.objects.filter(
+            created_at__gte=start_date,
+            created_at__lte=end_date
+        ).count()
+        
+        total_revenue = Order.objects.filter(
+            payment_status='paid',
+            created_at__gte=start_date,
+            created_at__lte=end_date
+        ).aggregate(total=Sum('total_amount'))['total'] or 0
         
         pending_orders = Order.objects.filter(status='pending').count()
         total_products = Product.objects.filter(available=True).count()
-        total_customers = CustomUser.objects.filter(user_type='customer').count()
         
-        # Contact message statistics
-        total_contact_messages = ContactMessage.objects.count()
-        new_contact_messages = ContactMessage.objects.filter(status='new').count()
-        unread_contact_messages = ContactMessage.objects.filter(status__in=['new', 'read']).count()
-        replied_contact_messages = ContactMessage.objects.filter(status='replied').count()
+        # Total customers - cumulative count up to the end of selected period
+        # This includes all customers registered from the beginning up to the selected month/year
+        total_customers = CustomUser.objects.filter(
+            user_type='customer',
+            date_joined__lte=end_date
+        ).count()
         
-        # Cake orders (orders with cake items)
+        # Contact message statistics (filtered by time period)
+        total_contact_messages = ContactMessage.objects.filter(
+            created_at__gte=start_date,
+            created_at__lte=end_date
+        ).count()
+        
+        new_contact_messages = ContactMessage.objects.filter(
+            status='new',
+            created_at__gte=start_date,
+            created_at__lte=end_date
+        ).count()
+        
+        unread_contact_messages = ContactMessage.objects.filter(
+            status__in=['new', 'read'],
+            created_at__gte=start_date,
+            created_at__lte=end_date
+        ).count()
+        
+        replied_contact_messages = ContactMessage.objects.filter(
+            status='replied',
+            created_at__gte=start_date,
+            created_at__lte=end_date
+        ).count()
+        
+        # Cake orders (orders with cake items) - filtered by time period
         cake_orders = OrderItem.objects.filter(
-            product__is_cake=True
+            product__is_cake=True,
+            order__created_at__gte=start_date,
+            order__created_at__lte=end_date
         ).values('order').distinct().count()
         
-        # Daily revenue for last 30 days
+        # Revenue data based on period
         daily_revenue = {}
-        for i in range(30):
-            date = (end_date - timedelta(days=i)).date()
-            date_str = date.strftime('%Y-%m-%d')
-            revenue = Order.objects.filter(
-                payment_status='paid',
-                created_at__date=date
-            ).aggregate(total=Sum('total_amount'))['total'] or 0
-            daily_revenue[date_str] = float(revenue)
+        if time_period == 'yearly':
+            # Group by month for yearly view
+            for month_num in range(1, 13):
+                month_start = timezone.datetime(int(selected_year or end_date.year), month_num, 1, tzinfo=timezone.get_current_timezone())
+                if month_num == 12:
+                    month_end = timezone.datetime(int(selected_year or end_date.year), 12, 31, 23, 59, 59, tzinfo=timezone.get_current_timezone())
+                else:
+                    month_end = timezone.datetime(int(selected_year or end_date.year), month_num + 1, 1, tzinfo=timezone.get_current_timezone()) - timedelta(seconds=1)
+                
+                month_str = month_start.strftime('%Y-%m')
+                
+                revenue = Order.objects.filter(
+                    payment_status='paid',
+                    created_at__gte=month_start,
+                    created_at__lte=month_end
+                ).aggregate(total=Sum('total_amount'))['total'] or 0
+                daily_revenue[month_str] = float(revenue)
+        else:
+            # Daily revenue for monthly view
+            current_date = start_date.date()
+            end_date_only = end_date.date()
+            
+            while current_date <= end_date_only:
+                date_str = current_date.strftime('%Y-%m-%d')
+                revenue = Order.objects.filter(
+                    payment_status='paid',
+                    created_at__date=current_date
+                ).aggregate(total=Sum('total_amount'))['total'] or 0
+                daily_revenue[date_str] = float(revenue)
+                current_date += timedelta(days=1)
         
-        # Order status distribution
-        order_status = Order.objects.values('status').annotate(
-            count=Count('id')
-        )
+        # Order status distribution (filtered by time period)
+        order_status = Order.objects.filter(
+            created_at__gte=start_date,
+            created_at__lte=end_date
+        ).values('status').annotate(count=Count('id'))
         order_status_dict = {item['status']: item['count'] for item in order_status}
         
-        # Payment methods distribution
-        payment_methods = Order.objects.values('payment_method').annotate(
-            count=Count('id')
-        )
+        # Payment methods distribution (filtered by time period)
+        payment_methods = Order.objects.filter(
+            created_at__gte=start_date,
+            created_at__lte=end_date
+        ).values('payment_method').annotate(count=Count('id'))
         payment_methods_dict = {item['payment_method']: item['count'] for item in payment_methods}
         
-        # Delivery types distribution
-        delivery_types = Order.objects.values('delivery_type').annotate(
-            count=Count('id')
-        )
+        # Delivery types distribution (filtered by time period)
+        delivery_types = Order.objects.filter(
+            created_at__gte=start_date,
+            created_at__lte=end_date
+        ).values('delivery_type').annotate(count=Count('id'))
         delivery_types_dict = {item['delivery_type']: item['count'] for item in delivery_types}
         
-        # Top selling products
+        # Top selling products (filtered by time period)
         top_products = OrderItem.objects.filter(
-            order__payment_status='paid'
+            order__payment_status='paid',
+            order__created_at__gte=start_date,
+            order__created_at__lte=end_date
         ).values('product__name').annotate(
             quantity_sold=Sum('quantity'),
             revenue=Sum(F('quantity') * F('price'))
@@ -246,9 +328,11 @@ def dashboard_api(request):
             for item in top_products
         ]
         
-        # Category performance
+        # Category performance (filtered by time period)
         category_performance = OrderItem.objects.filter(
-            order__payment_status='paid'
+            order__payment_status='paid',
+            order__created_at__gte=start_date,
+            order__created_at__lte=end_date
         ).values('product__category__name').annotate(
             quantity_sold=Sum('quantity'),
             revenue=Sum(F('quantity') * F('price'))
@@ -313,6 +397,11 @@ def dashboard_api(request):
         
         # Compile response data
         data = {
+            'time_period': time_period,
+            'selected_month': selected_month,
+            'selected_year': selected_year,
+            'start_date': start_date.isoformat(),
+            'end_date': end_date.isoformat(),
             'total_revenue': float(total_revenue),
             'total_orders': total_orders,
             'pending_orders': pending_orders,

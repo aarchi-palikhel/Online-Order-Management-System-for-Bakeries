@@ -1,20 +1,8 @@
 # admin.py
 from django.contrib import admin
 from django.utils.html import format_html
-from .models import Category, Product, ProductImage, ProductDescription
+from .models import Category, Product, ProductDescription
 from unfold.admin import ModelAdmin
-
-class ProductImageInline(admin.TabularInline):
-    model = ProductImage
-    extra = 1
-    readonly_fields = ['preview_image']
-    fields = ['image', 'preview_image', 'alt_text', 'is_default', 'display_order']
-    
-    def preview_image(self, obj):
-        if obj.image:
-            return format_html('<img src="{}" width="60" height="60" style="object-fit: cover; border-radius: 5px;" />', obj.image.url)
-        return "-"
-    preview_image.short_description = "Preview"
 
 
 @admin.register(Category)
@@ -60,7 +48,7 @@ class ProductAdmin(ModelAdmin):
     search_fields = ['name', 'short_description', 'description', 'category__name']
     list_editable = ['available', 'is_featured', 'is_cake', 'in_stock']
     prepopulated_fields = {'slug': ('name',)}
-    readonly_fields = ['created_at', 'updated_at', 'preview_image', 'display_weight']
+    readonly_fields = ['created_at', 'updated_at', 'preview_images', 'display_weight']
     
     fieldsets = (
         ('Basic Information', {
@@ -76,9 +64,9 @@ class ProductAdmin(ModelAdmin):
             'fields': ('is_cake', 'available_flavors', 'max_tiers', 'cake_weight', 'allow_custom_design', 'allow_reference_image'),
             'classes': ('collapse',)
         }),
-        ('Main Image', {
-            'fields': ('preview_image',),
-            'classes': ('collapse',)
+        ('Product Images', {
+            'fields': ('image', 'image_2', 'image_3', 'image_4', 'preview_images'),
+            'description': 'Upload product images. The first image will be used as the main product image.',
         }),
         ('Timestamps', {
             'fields': ('created_at', 'updated_at'),
@@ -91,40 +79,33 @@ class ProductAdmin(ModelAdmin):
     display_price.short_description = "Price"
     
     def display_image(self, obj):
-        # Try to get first product image
-        if obj.images.filter(is_default=True).exists():
-            image = obj.images.filter(is_default=True).first()
-            return format_html('<img src="{}" width="50" height="50" style="object-fit: cover; border-radius: 5px;" />', image.image.url)
-        return "-"
-    display_image.short_description = "Image"
-    
-    def preview_image(self, obj):
-        # Show main image if exists
-        if obj.images.filter(is_default=True).exists():
-            image = obj.images.filter(is_default=True).first()
-            return format_html('<img src="{}" width="200" height="200" style="object-fit: cover; border-radius: 10px;" />', image.image.url)
-        return "No default image set. Upload images in the Product Images section below."
-    preview_image.short_description = "Image Preview"
-
-@admin.register(ProductImage)
-class ProductImageAdmin(ModelAdmin):
-    list_display = ['product', 'preview_image', 'alt_text', 'is_default', 'display_order', 'created_at']
-    list_filter = ['is_default', 'created_at']
-    search_fields = ['product__name', 'alt_text']
-    list_editable = ['is_default', 'display_order', 'alt_text']
-    readonly_fields = ['created_at', 'preview_image_large']
-    
-    def preview_image(self, obj):
         if obj.image:
             return format_html('<img src="{}" width="50" height="50" style="object-fit: cover; border-radius: 5px;" />', obj.image.url)
         return "-"
-    preview_image.short_description = "Preview"
+    display_image.short_description = "Image"
     
-    def preview_image_large(self, obj):
-        if obj.image:
-            return format_html('<img src="{}" width="300" height="300" style="object-fit: cover; border-radius: 10px;" />', obj.image.url)
-        return "No image uploaded"
-    preview_image_large.short_description = "Large Preview"
+    def preview_images(self, obj):
+        """Show all product images"""
+        if not obj.pk:
+            return "Save the product first to see image previews."
+        
+        html = '<div style="display: flex; gap: 10px; flex-wrap: wrap;">'
+        images = obj.get_all_images()
+        
+        if not images:
+            return "No images uploaded yet."
+        
+        for idx, img in enumerate(images, 1):
+            html += f'''
+                <div style="text-align: center;">
+                    <img src="{img.url}" width="150" height="150" style="object-fit: cover; border-radius: 8px; border: 2px solid #ddd;" />
+                    <p style="margin: 5px 0 0 0; font-size: 12px; color: #666;">Image {idx}</p>
+                </div>
+            '''
+        
+        html += '</div>'
+        return format_html(html)
+    preview_images.short_description = "Image Previews"
 
 @admin.register(ProductDescription)
 class ProductDescriptionAdmin(ModelAdmin):

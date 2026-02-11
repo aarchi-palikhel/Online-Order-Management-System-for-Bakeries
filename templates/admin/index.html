@@ -391,10 +391,34 @@
             <p>Welcome back! Here's what's happening with your bakery today.</p>
         </div>
 
-        <!-- Quick Actions -->
-        {% if perms.orders.add_order or perms.products.add_product %}
-        <button class="refresh-button" onclick="location.reload()">Refresh Dashboard</button>
-        {% endif %}
+        <!-- Quick Actions and Filter -->
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 10px;">
+            {% if perms.orders.add_order or perms.products.add_product %}
+            <button class="refresh-button" onclick="refreshDashboard()">Refresh Dashboard</button>
+            {% endif %}
+            
+            <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+                <label for="timePeriodFilter" style="font-weight: 600; color: var(--dark);">View:</label>
+                <select id="timePeriodFilter" style="padding: 10px 20px; border: 1px solid var(--border); border-radius: 4px; background: white; cursor: pointer; font-weight: 600;">
+                    <option value="monthly" selected>Monthly</option>
+                    <option value="yearly">Yearly</option>
+                </select>
+                
+                <!-- Month Selector (shown for monthly view) -->
+                <div id="monthSelector" style="display: flex; align-items: center; gap: 10px;">
+                    <label for="monthFilter" style="font-weight: 600; color: var(--dark);">Month:</label>
+                    <input type="month" id="monthFilter" style="padding: 10px 15px; border: 1px solid var(--border); border-radius: 4px; background: white; cursor: pointer; font-weight: 600;">
+                </div>
+                
+                <!-- Year Selector (shown for yearly view) -->
+                <div id="yearSelector" style="display: none; align-items: center; gap: 10px;">
+                    <label for="yearFilter" style="font-weight: 600; color: var(--dark);">Year:</label>
+                    <select id="yearFilter" style="padding: 10px 20px; border: 1px solid var(--border); border-radius: 4px; background: white; cursor: pointer; font-weight: 600;">
+                        <!-- Will be populated by JavaScript -->
+                    </select>
+                </div>
+            </div>
+        </div>
 
         <!-- Statistics Grid -->
         <div class="stats-grid">
@@ -402,7 +426,7 @@
                 <div class="stat-label">Total Revenue</div>
                 <div class="stat-value" id="totalRevenue">Rs. 0</div>
                 <div class="stat-change neutral">
-                    <span id="revenueChange">From paid orders</span>
+                    <span id="revenueChange">Current Month</span>
                 </div>
             </div>
 
@@ -410,7 +434,7 @@
                 <div class="stat-label">Total Orders</div>
                 <div class="stat-value" id="totalOrders">0</div>
                 <div class="stat-change neutral">
-                    <span id="ordersChange">All time</span>
+                    <span id="ordersChange">Current Month</span>
                 </div>
             </div>
 
@@ -434,7 +458,7 @@
                 <div class="stat-label">Total Customers</div>
                 <div class="stat-value" id="totalCustomers">0</div>
                 <div class="stat-change neutral">
-                    <span id="customersChange">Registered users</span>
+                    <span id="customersChange">Cumulative total</span>
                 </div>
             </div>
 
@@ -442,7 +466,7 @@
                 <div class="stat-label">Cake Orders</div>
                 <div class="stat-value" id="cakeOrders">0</div>
                 <div class="stat-change neutral">
-                    <span id="cakeChange">Custom cakes</span>
+                    <span id="cakeChange">Current Month</span>
                 </div>
             </div>
 
@@ -450,7 +474,7 @@
                 <div class="stat-label">Contact Messages</div>
                 <div class="stat-value" id="totalContactMessages">0</div>
                 <div class="stat-change neutral">
-                    <span id="contactChange">Total inquiries</span>
+                    <span id="contactChange">Current Month</span>
                 </div>
             </div>
 
@@ -458,7 +482,7 @@
                 <div class="stat-label">New Messages</div>
                 <div class="stat-value" id="newContactMessages">0</div>
                 <div class="stat-change neutral">
-                    <span id="newContactChange">Unread inquiries</span>
+                    <span id="newContactChange">Current Month</span>
                 </div>
             </div>
         </div>
@@ -567,6 +591,9 @@
     <script>
         // Configuration
         let revenueChart, statusChart, paymentChart, deliveryChart, topProductsChart, categoryChart;
+        let currentPeriod = 'monthly'; // Track current period
+        let currentMonth = null; // Track selected month
+        let currentYear = null; // Track selected year
 
         // Color Scheme
         const colors = {
@@ -593,10 +620,81 @@
             pickup: '#FF5722'
         };
 
+        // Initialize date selectors
+        function initializeDateSelectors() {
+            // Set current month as default
+            const now = new Date();
+            const currentMonthStr = now.toISOString().slice(0, 7); // YYYY-MM format
+            document.getElementById('monthFilter').value = currentMonthStr;
+            currentMonth = currentMonthStr;
+            
+            // Populate year selector
+            const yearSelect = document.getElementById('yearFilter');
+            const allowedYears = [2026, 2025];
+            
+            allowedYears.forEach((year, index) => {
+                const option = document.createElement('option');
+                option.value = year;
+                option.textContent = year;
+                if (index === 0) option.selected = true; // Select 2026 by default
+                yearSelect.appendChild(option);
+            });
+            
+            currentYear = allowedYears[0].toString(); // Default to 2026
+        }
+
+        // Toggle month/year selector based on period
+        function toggleSelectors() {
+            const period = document.getElementById('timePeriodFilter').value;
+            const monthSelector = document.getElementById('monthSelector');
+            const yearSelector = document.getElementById('yearSelector');
+            
+            if (period === 'monthly') {
+                monthSelector.style.display = 'flex';
+                yearSelector.style.display = 'none';
+            } else {
+                monthSelector.style.display = 'none';
+                yearSelector.style.display = 'flex';
+            }
+        }
+
+        // Refresh dashboard to current month/year
+        function refreshDashboard() {
+            const now = new Date();
+            const period = document.getElementById('timePeriodFilter').value;
+            
+            if (period === 'monthly') {
+                const currentMonthStr = now.toISOString().slice(0, 7);
+                document.getElementById('monthFilter').value = currentMonthStr;
+                currentMonth = currentMonthStr;
+            } else {
+                const currentYearNum = now.getFullYear();
+                document.getElementById('yearFilter').value = currentYearNum;
+                currentYear = currentYearNum.toString();
+            }
+            
+            fetchDashboardData();
+        }
+
         // Fetch Dashboard Data
         async function fetchDashboardData() {
             try {
-                const response = await fetch('/api/dashboard/', {
+                const period = document.getElementById('timePeriodFilter').value;
+                currentPeriod = period;
+                
+                let url = `/api/dashboard/?period=${period}`;
+                
+                if (period === 'monthly') {
+                    const month = document.getElementById('monthFilter').value;
+                    currentMonth = month;
+                    url += `&month=${month}`;
+                } else {
+                    const year = document.getElementById('yearFilter').value;
+                    currentYear = year;
+                    url += `&year=${year}`;
+                }
+                
+                const response = await fetch(url, {
                     method: 'GET',
                     headers: {
                         'X-CSRFToken': getCookie('csrftoken'),
@@ -623,6 +721,20 @@
 
         // Update Statistics
         function updateStatistics(data) {
+            let periodLabel = '';
+            let customerLabel = '';
+            
+            if (currentPeriod === 'yearly') {
+                periodLabel = `Year ${currentYear}`;
+                customerLabel = `Up to ${currentYear}`;
+            } else {
+                const [year, month] = currentMonth.split('-');
+                const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 
+                                   'July', 'August', 'September', 'October', 'November', 'December'];
+                periodLabel = `${monthNames[parseInt(month) - 1]} ${year}`;
+                customerLabel = `Up to ${monthNames[parseInt(month) - 1]} ${year}`;
+            }
+            
             document.getElementById('totalRevenue').textContent = 'Rs. ' + formatCurrency(data.total_revenue || 0);
             document.getElementById('totalOrders').textContent = data.total_orders || 0;
             document.getElementById('pendingOrders').textContent = data.pending_orders || 0;
@@ -631,6 +743,14 @@
             document.getElementById('cakeOrders').textContent = data.cake_orders || 0;
             document.getElementById('totalContactMessages').textContent = data.total_contact_messages || 0;
             document.getElementById('newContactMessages').textContent = data.new_contact_messages || 0;
+            
+            // Update change labels with period info
+            document.getElementById('revenueChange').textContent = periodLabel;
+            document.getElementById('ordersChange').textContent = periodLabel;
+            document.getElementById('cakeChange').textContent = periodLabel;
+            document.getElementById('customersChange').textContent = customerLabel;
+            document.getElementById('contactChange').textContent = periodLabel;
+            document.getElementById('newContactChange').textContent = periodLabel;
         }
 
         // Update Charts
@@ -647,17 +767,42 @@
         function updateRevenueChart(dailyRevenue) {
             const ctx = document.getElementById('revenueChart').getContext('2d');
             
-            const sortedDates = Object.keys(dailyRevenue).sort().slice(-30);
+            const sortedDates = Object.keys(dailyRevenue).sort();
             const values = sortedDates.map(date => dailyRevenue[date]);
+            
+            // Format labels and title based on period
+            let formattedLabels;
+            let chartTitle;
+            
+            if (currentPeriod === 'yearly') {
+                // Format as "Jan", "Feb", etc.
+                formattedLabels = sortedDates.map(date => {
+                    const [year, month] = date.split('-');
+                    const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+                    return monthNames[parseInt(month) - 1];
+                });
+                chartTitle = `Revenue Trend for ${currentYear}`;
+            } else {
+                // Format as "Jan 1", "Jan 2", etc.
+                formattedLabels = sortedDates.map(date => {
+                    const d = new Date(date);
+                    const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+                    return `${monthNames[d.getMonth()]} ${d.getDate()}`;
+                });
+                const [year, month] = currentMonth.split('-');
+                const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 
+                                   'July', 'August', 'September', 'October', 'November', 'December'];
+                chartTitle = `Revenue Trend for ${monthNames[parseInt(month) - 1]} ${year}`;
+            }
 
             if (revenueChart) revenueChart.destroy();
-
+            
             revenueChart = new Chart(ctx, {
                 type: 'line',
                 data: {
-                    labels: sortedDates.map(date => new Date(date).toLocaleDateString()),
+                    labels: formattedLabels,
                     datasets: [{
-                        label: 'Daily Revenue (Rs.)',
+                        label: currentPeriod === 'yearly' ? 'Monthly Revenue (Rs.)' : 'Daily Revenue (Rs.)',
                         data: values,
                         borderColor: colors.primary,
                         backgroundColor: 'rgba(76, 175, 80, 0.1)',
@@ -676,6 +821,9 @@
                         legend: {
                             display: true,
                             position: 'top',
+                        },
+                        title: {
+                            display: false
                         }
                     },
                     scales: {
@@ -690,6 +838,13 @@
                     }
                 }
             });
+            
+            // Update chart title in the container
+            const chartContainer = document.getElementById('revenueChart').closest('.chart-container');
+            const titleElement = chartContainer.querySelector('h3');
+            if (titleElement) {
+                titleElement.textContent = chartTitle;
+            }
         }
 
         // Order Status Chart
@@ -1056,9 +1211,41 @@
 
         // Initialize on page load
         document.addEventListener('DOMContentLoaded', function() {
+            // Initialize date selectors
+            initializeDateSelectors();
+            
+            // Load current month data by default
             fetchDashboardData();
+            
+            // Add event listener for time period filter
+            const filterSelect = document.getElementById('timePeriodFilter');
+            if (filterSelect) {
+                filterSelect.addEventListener('change', function() {
+                    toggleSelectors();
+                    fetchDashboardData();
+                });
+            }
+            
+            // Add event listener for month filter
+            const monthFilter = document.getElementById('monthFilter');
+            if (monthFilter) {
+                monthFilter.addEventListener('change', function() {
+                    fetchDashboardData();
+                });
+            }
+            
+            // Add event listener for year filter
+            const yearFilter = document.getElementById('yearFilter');
+            if (yearFilter) {
+                yearFilter.addEventListener('change', function() {
+                    fetchDashboardData();
+                });
+            }
+            
             // Refresh data every 5 minutes
-            setInterval(fetchDashboardData, 5 * 60 * 1000);
+            setInterval(() => {
+                fetchDashboardData();
+            }, 5 * 60 * 1000);
         });
     </script>
 {% endblock %}

@@ -100,6 +100,12 @@ class Product(models.Model):
     
     # Metadata - For non-cake products
     weight = models.CharField(max_length=50, blank=True, help_text="e.g., 500g, 1kg, 2kg (for non-cake products)")
+    
+    # Product Images - Direct image fields
+    image = models.ImageField(upload_to='products/%Y/%m/%d/', blank=True, null=True, help_text="Main product image")
+    image_2 = models.ImageField(upload_to='products/%Y/%m/%d/', blank=True, null=True, help_text="Additional image 2")
+    image_3 = models.ImageField(upload_to='products/%Y/%m/%d/', blank=True, null=True, help_text="Additional image 3")
+    image_4 = models.ImageField(upload_to='products/%Y/%m/%d/', blank=True, null=True, help_text="Additional image 4")
 
     class Meta:
         ordering = ['name']
@@ -118,7 +124,24 @@ class Product(models.Model):
 
     def get_absolute_url(self):
         return reverse('products:product_detail', args=[self.id, self.slug])
-
+    
+    def get_all_images(self):
+        """Return list of all product images"""
+        images = []
+        if self.image:
+            images.append(self.image)
+        if self.image_2:
+            images.append(self.image_2)
+        if self.image_3:
+            images.append(self.image_3)
+        if self.image_4:
+            images.append(self.image_4)
+        return images
+    
+    def get_main_image(self):
+        """Return the main product image"""
+        return self.image if self.image else None
+    
     @property
     def display_price(self):
         """Return formatted price with currency symbol"""
@@ -164,20 +187,6 @@ class Product(models.Model):
             ingredients="Fresh ingredients used",
             storage_instructions="Store in a cool, dry place",
         )
-
-class ProductImage(models.Model):
-    product = models.ForeignKey(Product, related_name='images', on_delete=models.CASCADE)
-    image = models.ImageField(upload_to='products/%Y/%m/%d/')
-    alt_text = models.CharField(max_length=200, blank=True)
-    is_default = models.BooleanField(default=False)
-    display_order = models.PositiveIntegerField(default=0)
-    created_at = models.DateTimeField(auto_now_add=True)
-
-    class Meta:
-        ordering = ['display_order', 'created_at']
-    
-    def __str__(self):
-        return f"Image for {self.product.name}"
 
 class ProductDescription(models.Model):
     """Model for detailed product descriptions with sections"""

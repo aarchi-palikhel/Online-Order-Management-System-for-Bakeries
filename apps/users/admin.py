@@ -3,9 +3,75 @@ from django.contrib.auth.admin import UserAdmin
 from django.contrib.auth.admin import GroupAdmin
 from django.contrib.auth.models import Group
 from django.utils.html import format_html
+from django import forms
 from .models import CustomUser, Customer, Staff, Owner
 from unfold.admin import ModelAdmin
 from unfold.forms import AdminPasswordChangeForm, UserChangeForm, UserCreationForm
+
+# ==================== CUSTOM FORMS WITH PLACEHOLDERS ====================
+
+class CustomUserCreationFormWithPlaceholders(UserCreationForm):
+    """Custom user creation form with placeholders"""
+    
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Add placeholders to all fields
+        self.fields['username'].widget.attrs.update({
+            'placeholder': 'Enter username (letters, digits and @/./+/-/_ only)'
+        })
+        if 'email' in self.fields:
+            self.fields['email'].widget.attrs.update({
+                'placeholder': 'Enter email address'
+            })
+        if 'mobile_no' in self.fields:
+            self.fields['mobile_no'].widget.attrs.update({
+                'placeholder': 'Enter mobile number (optional)'
+            })
+        if 'user_type' in self.fields:
+            self.fields['user_type'].widget.attrs.update({
+                'placeholder': 'Select user type'
+            })
+        self.fields['password1'].widget.attrs.update({
+            'placeholder': 'Enter password'
+        })
+        self.fields['password2'].widget.attrs.update({
+            'placeholder': 'Confirm password'
+        })
+
+class CustomUserChangeFormWithPlaceholders(UserChangeForm):
+    """Custom user change form with placeholders"""
+    
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Add placeholders to all fields
+        if 'username' in self.fields:
+            self.fields['username'].widget.attrs.update({
+                'placeholder': 'Enter username'
+            })
+        if 'first_name' in self.fields:
+            self.fields['first_name'].widget.attrs.update({
+                'placeholder': 'Enter first name'
+            })
+        if 'last_name' in self.fields:
+            self.fields['last_name'].widget.attrs.update({
+                'placeholder': 'Enter last name'
+            })
+        if 'email' in self.fields:
+            self.fields['email'].widget.attrs.update({
+                'placeholder': 'Enter email address'
+            })
+        if 'mobile_no' in self.fields:
+            self.fields['mobile_no'].widget.attrs.update({
+                'placeholder': 'Enter mobile number'
+            })
+        if 'primary_address' in self.fields:
+            self.fields['primary_address'].widget.attrs.update({
+                'placeholder': 'Enter primary address'
+            })
+        if 'delivery_address' in self.fields:
+            self.fields['delivery_address'].widget.attrs.update({
+                'placeholder': 'Enter delivery address'
+            })
 
 # ==================== PERMISSION HELPERS ====================
 
@@ -24,6 +90,9 @@ def is_staff_user(request):
 # ==================== CUSTOM USER ADMIN ====================
 @admin.register(CustomUser)
 class CustomUserAdmin(UserAdmin):
+    form = CustomUserChangeFormWithPlaceholders
+    add_form = CustomUserCreationFormWithPlaceholders
+    
     list_display = ['username', 'email', 'mobile_no', 'user_type', 'first_name', 'last_name', 'is_active', 'first_login_completed', 'date_joined']
     list_filter = ['user_type', 'is_active', 'first_login_completed', 'date_joined']
     search_fields = ['username', 'email', 'mobile_no', 'first_name', 'last_name']

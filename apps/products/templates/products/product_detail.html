@@ -29,13 +29,11 @@
             <div class="w-full p-4 sm:p-8 flex items-center justify-center bg-gray-50">
                 <div class="w-full max-w-sm">
                     <div class="rounded-lg overflow-hidden bg-white flex items-center justify-center">
-                        {% if product.images.exists %}
-                            {% with product.images.first as main_image %}
+                        {% if product.image %}
                             <img id="main-image" 
-                                 src="{{ main_image.image.url }}" 
-                                 alt="{{ main_image.alt_text|default:product.name }}" 
+                                 src="{{ product.image.url }}" 
+                                 alt="{{ product.name }}" 
                                  class="w-full h-auto max-h-[250px] sm:max-h-[350px] lg:max-h-[400px] object-contain p-4 sm:p-6">
-                            {% endwith %}
                         {% else %}
                             <div class="w-full h-64 sm:h-80 flex items-center justify-center bg-linear-to-br from-amber-50 to-orange-50">
                                 <div class="text-center px-4">

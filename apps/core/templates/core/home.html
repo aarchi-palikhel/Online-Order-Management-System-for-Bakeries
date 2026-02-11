@@ -49,12 +49,10 @@
             <div class="bg-white rounded-lg shadow-lg overflow-hidden hover:shadow-2xl hover:-translate-y-2 transition duration-300 border border-gray-100">
                 <!-- Product Image -->
                 <div class="relative h-48 sm:h-56 overflow-hidden bg-gray-100">
-                    {% if product.images.all %}
-                        {% with product.images.first as product_image %}
+                    {% if product.image %}
                         <a href="{% url 'products:product_detail' product.id %}">
-                            <img src="{{ product_image.image.url }}" alt="{{ product.name }}" class="w-full h-full object-cover transform hover:scale-110 transition duration-300">
+                            <img src="{{ product.image.url }}" alt="{{ product.name }}" class="w-full h-full object-cover transform hover:scale-110 transition duration-300">
                         </a>
-                        {% endwith %}
                     {% else %}
                         <a href="{% url 'products:product_detail' product.id %}">
                             <div class="w-full h-full bg-linear-to-br from-amber-50 to-orange-50 flex items-center justify-center">

@@ -5,7 +5,7 @@ from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
 from django.utils import timezone
 from django.http import JsonResponse
 from django.contrib import messages
-from .models import Product, Category, ProductImage
+from .models import Product, Category
 from .forms import ProductSearchForm
 from django.contrib.auth.decorators import login_required
 from cart.forms import CartAddProductForm
@@ -17,7 +17,7 @@ def product_list(request, category_slug=None):
     categories = Category.objects.all()
     
     # Get all available products from database with optimized queries
-    products = Product.objects.filter(available=True).select_related('category').prefetch_related('images').order_by('-is_featured', 'name')
+    products = Product.objects.filter(available=True).select_related('category').order_by('-is_featured', 'name')
     
     # Apply category filter if provided
     if category_slug:
@@ -74,7 +74,7 @@ def product_list(request, category_slug=None):
 def product_detail(request, product_id):
     """Display detailed view of a single product"""
     product = get_object_or_404(
-        Product.objects.select_related('category').prefetch_related('images'),
+        Product.objects.select_related('category'),
         id=product_id,
         available=True
     )
@@ -83,7 +83,7 @@ def product_detail(request, product_id):
     related_products = Product.objects.filter(
         category=product.category,
         available=True
-    ).exclude(id=product.id).select_related('category').prefetch_related('images')[:4]
+    ).exclude(id=product.id).select_related('category')[:4]
     
     # Prepare cake customization form data if product is a cake
     cake_form = None
@@ -138,7 +138,7 @@ def product_detail(request, product_id):
 def product_search(request):
     """Handle product search"""
     form = ProductSearchForm(request.GET or None)
-    products = Product.objects.filter(available=True).select_related('category').prefetch_related('images')
+    products = Product.objects.filter(available=True).select_related('category')
     categories = Category.objects.all()
     
     if form.is_valid():

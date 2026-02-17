@@ -1,5 +1,5 @@
 from django.shortcuts import render
-from django.http import JsonResponse
+from django.http import JsonResponse, HttpResponse
 from django.contrib.admin.views.decorators import staff_member_required
 from django.db.models import Sum, Count, Q, F
 from django.utils import timezone
@@ -439,3 +439,217 @@ def dashboard_api(request):
             'error': str(e),
             'message': 'Failed to fetch dashboard data'
         }, status=500)
+
+
+@staff_member_required
+def dashboard_export_excel(request):
+    """Export dashboard data to Excel"""
+    try:
+        from openpyxl import Workbook
+        from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
+        from openpyxl.utils import get_column_letter
+        
+        # Get time period filter
+        time_period = request.GET.get('period', 'monthly')
+        selected_month = request.GET.get('month', None)
+        selected_year = request.GET.get('year', None)
+        
+        # Calculate date range
+        end_date = timezone.now()
+        
+        if time_period == 'yearly' and selected_year:
+            start_date = timezone.datetime(int(selected_year), 1, 1, tzinfo=timezone.get_current_timezone())
+            end_date = timezone.datetime(int(selected_year), 12, 31, 23, 59, 59, tzinfo=timezone.get_current_timezone())
+            period_label = f"Year {selected_year}"
+        elif time_period == 'monthly' and selected_month:
+            year, month = map(int, selected_month.split('-'))
+            start_date = timezone.datetime(year, month, 1, tzinfo=timezone.get_current_timezone())
+            if month == 12:
+                end_date = timezone.datetime(year, 12, 31, 23, 59, 59, tzinfo=timezone.get_current_timezone())
+            else:
+                end_date = timezone.datetime(year, month + 1, 1, tzinfo=timezone.get_current_timezone()) - timedelta(seconds=1)
+            month_names = ['January', 'February', 'March', 'April', 'May', 'June', 
+                          'July', 'August', 'September', 'October', 'November', 'December']
+            period_label = f"{month_names[month - 1]} {year}"
+        else:
+            start_date = end_date.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+            period_label = "Current Month"
+        
+        # Fetch data (reuse logic from dashboard_api)
+        total_orders = Order.objects.filter(
+            created_at__gte=start_date,
+            created_at__lte=end_date
+        ).count()
+        
+        total_revenue = Order.objects.filter(
+            payment_status='paid',
+            created_at__gte=start_date,
+            created_at__lte=end_date
+        ).aggregate(total=Sum('total_amount'))['total'] or 0
+        
+        pending_orders = Order.objects.filter(status='pending').count()
+        total_products = Product.objects.filter(available=True).count()
+        total_customers = CustomUser.objects.filter(
+            user_type='customer',
+            date_joined__lte=end_date
+        ).count()
+        
+        cake_orders = OrderItem.objects.filter(
+            product__is_cake=True,
+            order__created_at__gte=start_date,
+            order__created_at__lte=end_date
+        ).values('order').distinct().count()
+        
+        total_contact_messages = ContactMessage.objects.filter(
+            created_at__gte=start_date,
+            created_at__lte=end_date
+        ).count()
+        
+        new_contact_messages = ContactMessage.objects.filter(
+            status='new',
+            created_at__gte=start_date,
+            created_at__lte=end_date
+        ).count()
+        
+        # Create workbook
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "Dashboard Summary"
+        
+        # Define styles
+        header_fill = PatternFill(start_color="D97706", end_color="D97706", fill_type="solid")
+        header_font = Font(bold=True, color="FFFFFF", size=12)
+        title_font = Font(bold=True, size=14)
+        border = Border(
+            left=Side(style='thin'),
+            right=Side(style='thin'),
+            top=Side(style='thin'),
+            bottom=Side(style='thin')
+        )
+        
+        # Title
+        ws['A1'] = "Live Bakery - Dashboard Report"
+        ws['A1'].font = Font(bold=True, size=16, color="D97706")
+        ws.merge_cells('A1:D1')
+        
+        ws['A2'] = f"Period: {period_label}"
+        ws['A2'].font = Font(bold=True, size=12)
+        ws.merge_cells('A2:D2')
+        
+        ws['A3'] = f"Generated: {timezone.now().strftime('%Y-%m-%d %H:%M:%S')}"
+        ws['A3'].font = Font(size=10, italic=True)
+        ws.merge_cells('A3:D3')
+        
+        # Summary Statistics
+        row = 5
+        ws[f'A{row}'] = "Summary Statistics"
+        ws[f'A{row}'].font = title_font
+        ws.merge_cells(f'A{row}:B{row}')
+        
+        row += 1
+        ws[f'A{row}'] = "Metric"
+        ws[f'B{row}'] = "Value"
+        ws[f'A{row}'].fill = header_fill
+        ws[f'B{row}'].fill = header_fill
+        ws[f'A{row}'].font = header_font
+        ws[f'B{row}'].font = header_font
+        
+        stats = [
+            ("Total Revenue", f"Rs. {total_revenue:,.2f}"),
+            ("Total Orders", total_orders),
+            ("Pending Orders", pending_orders),
+            ("Active Products", total_products),
+            ("Total Customers", total_customers),
+            ("Cake Orders", cake_orders),
+            ("Contact Messages", total_contact_messages),
+            ("New Messages", new_contact_messages),
+        ]
+        
+        for metric, value in stats:
+            row += 1
+            ws[f'A{row}'] = metric
+            ws[f'B{row}'] = value
+            ws[f'A{row}'].border = border
+            ws[f'B{row}'].border = border
+        
+        # Order Status Distribution
+        row += 3
+        ws[f'A{row}'] = "Order Status Distribution"
+        ws[f'A{row}'].font = title_font
+        ws.merge_cells(f'A{row}:B{row}')
+        
+        row += 1
+        ws[f'A{row}'] = "Status"
+        ws[f'B{row}'] = "Count"
+        ws[f'A{row}'].fill = header_fill
+        ws[f'B{row}'].fill = header_fill
+        ws[f'A{row}'].font = header_font
+        ws[f'B{row}'].font = header_font
+        
+        order_status = Order.objects.filter(
+            created_at__gte=start_date,
+            created_at__lte=end_date
+        ).values('status').annotate(count=Count('id'))
+        
+        for item in order_status:
+            row += 1
+            ws[f'A{row}'] = item['status'].capitalize()
+            ws[f'B{row}'] = item['count']
+            ws[f'A{row}'].border = border
+            ws[f'B{row}'].border = border
+        
+        # Top Products
+        row += 3
+        ws[f'A{row}'] = "Top Selling Products"
+        ws[f'A{row}'].font = title_font
+        ws.merge_cells(f'A{row}:D{row}')
+        
+        row += 1
+        ws[f'A{row}'] = "Product"
+        ws[f'B{row}'] = "Quantity Sold"
+        ws[f'C{row}'] = "Revenue"
+        ws[f'D{row}'] = "Orders"
+        for col in ['A', 'B', 'C', 'D']:
+            ws[f'{col}{row}'].fill = header_fill
+            ws[f'{col}{row}'].font = header_font
+        
+        top_products = OrderItem.objects.filter(
+            order__payment_status='paid',
+            order__created_at__gte=start_date,
+            order__created_at__lte=end_date
+        ).values('product__name').annotate(
+            quantity_sold=Sum('quantity'),
+            revenue=Sum(F('quantity') * F('price')),
+            orders_count=Count('order', distinct=True)
+        ).order_by('-quantity_sold')[:10]
+        
+        for item in top_products:
+            row += 1
+            ws[f'A{row}'] = item['product__name']
+            ws[f'B{row}'] = item['quantity_sold']
+            ws[f'C{row}'] = f"Rs. {item['revenue']:,.2f}"
+            ws[f'D{row}'] = item['orders_count']
+            for col in ['A', 'B', 'C', 'D']:
+                ws[f'{col}{row}'].border = border
+        
+        # Adjust column widths
+        ws.column_dimensions['A'].width = 30
+        ws.column_dimensions['B'].width = 20
+        ws.column_dimensions['C'].width = 20
+        ws.column_dimensions['D'].width = 15
+        
+        # Create HTTP response
+        response = HttpResponse(
+            content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        )
+        filename = f"Live_Bakery_Dashboard_{period_label.replace(' ', '_')}.xlsx"
+        response['Content-Disposition'] = f'attachment; filename="{filename}"'
+        
+        wb.save(response)
+        return response
+        
+    except Exception as e:
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.error(f"Error exporting dashboard to Excel: {e}")
+        return HttpResponse(f'Error generating Excel file: {str(e)}', status=500)

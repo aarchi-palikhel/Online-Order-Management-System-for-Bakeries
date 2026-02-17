@@ -393,9 +393,12 @@
 
         <!-- Quick Actions and Filter -->
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 10px;">
-            {% if perms.orders.add_order or perms.products.add_product %}
-            <button class="refresh-button" onclick="refreshDashboard()">Refresh Dashboard</button>
-            {% endif %}
+            <div style="display: flex; gap: 10px;">
+                {% if perms.orders.add_order or perms.products.add_product %}
+                <button class="refresh-button" onclick="refreshDashboard()">Refresh Dashboard</button>
+                {% endif %}
+                <button class="refresh-button" onclick="exportToExcel()" style="background: #2196F3;">📊 Export to Excel</button>
+            </div>
             
             <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
                 <label for="timePeriodFilter" style="font-weight: 600; color: var(--dark);">View:</label>
@@ -1207,6 +1210,23 @@
                 maximumFractionDigits: 2,
                 minimumFractionDigits: 2,
             });
+        }
+
+        // Export to Excel function
+        function exportToExcel() {
+            const period = document.getElementById('timePeriodFilter').value;
+            let url = `/api/dashboard/export/?period=${period}`;
+            
+            if (period === 'monthly') {
+                const month = document.getElementById('monthFilter').value;
+                url += `&month=${month}`;
+            } else {
+                const year = document.getElementById('yearFilter').value;
+                url += `&year=${year}`;
+            }
+            
+            // Open in new window to trigger download
+            window.location.href = url;
         }
 
         // Initialize on page load

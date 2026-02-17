@@ -1,6 +1,6 @@
 from django.urls import path
 from . import views
-from core.views import dashboard_api
+from core.views import dashboard_api, dashboard_export_excel
 
 app_name = 'core'
 
@@ -11,4 +11,5 @@ urlpatterns = [
     path('contact/', views.contact, name='contact'),
     path('clear-notification/', views.clear_notification, name='clear_notification'),
     path('api/dashboard/', dashboard_api, name='api_dashboard'),
+    path('api/dashboard/export/', dashboard_export_excel, name='dashboard_export_excel'),
 ]

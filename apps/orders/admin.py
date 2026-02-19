@@ -469,12 +469,12 @@ class OrderItemAdmin(ModelAdmin):
 @admin.register(CakeDesignReference)
 class CakeDesignReferenceAdmin(ModelAdmin):
     list_display = ['id_display', 'order_info', 'product_info', 'title', 
-                    'image_preview', 'uploaded_at']
+                    'image_preview', 'download_button', 'uploaded_at']
     list_filter = ['uploaded_at', 'order__status']
     search_fields = ['title', 'description', 'order__order_number', 
                      'order_item__product__name', 'order__user__username']
     readonly_fields = ['order_link', 'order_item_link', 'product_info_display',
-                      'image_preview_large', 'uploaded_at_display']
+                      'image_preview_large', 'download_link', 'uploaded_at_display']
     list_per_page = 20
     date_hierarchy = 'uploaded_at'
     
@@ -486,7 +486,7 @@ class CakeDesignReferenceAdmin(ModelAdmin):
             'fields': ('title', 'description')
         }),
         ('Image', {
-            'fields': ('image', 'image_preview_large')
+            'fields': ('image', 'image_preview_large', 'download_link')
         }),
         ('Timestamps', {
             'fields': ('uploaded_at_display', 'updated_at'),
@@ -529,15 +529,41 @@ class CakeDesignReferenceAdmin(ModelAdmin):
         return "No image"
     image_preview.short_description = 'Preview'
     
+    def download_button(self, obj):
+        """Display download button in list view"""
+        if obj.image:
+            url = reverse('admin:download_cake_design', args=[obj.id])
+            return format_html(
+                '<a href="{}" class="button" style="padding: 5px 10px; background-color: #10b981; color: white; text-decoration: none; border-radius: 4px; font-size: 12px;">📥 Download</a>',
+                url
+            )
+        return "—"
+    download_button.short_description = 'Download'
+    
     def image_preview_large(self, obj):
         if obj.image:
             return format_html(
-                '<img src="{}" style="max-height: 300px; max-width: 100%;" /><br>'
-                '<a href="{}" target="_blank">View Full Image</a>',
+                '<img src="{}" style="max-height: 300px; max-width: 100%; border: 1px solid #ddd; border-radius: 4px; padding: 5px;" /><br><br>'
+                '<a href="{}" target="_blank" class="button" style="margin-right: 10px;">🔍 View Full Size</a>',
                 obj.image.url, obj.image.url
             )
         return "No image"
     image_preview_large.short_description = 'Image Preview'
+    
+    def download_link(self, obj):
+        """Display download link in detail view"""
+        if obj.image:
+            url = reverse('admin:download_cake_design', args=[obj.id])
+            # Get filename from image path
+            import os
+            filename = os.path.basename(obj.image.name)
+            return format_html(
+                '<a href="{}" class="button" style="padding: 10px 20px; background-color: #10b981; color: white; text-decoration: none; border-radius: 6px; font-size: 14px; display: inline-block;">📥 Download Image</a><br><br>'
+                '<small style="color: #666;">Filename: <strong>{}</strong></small>',
+                url, filename
+            )
+        return "No image to download"
+    download_link.short_description = 'Download Image'
     
     def order_link(self, obj):
         if obj.order:
@@ -546,6 +572,7 @@ class CakeDesignReferenceAdmin(ModelAdmin):
                 '<a href="{}">Order #{}</a> ({})',
                 url, obj.order.id, obj.order.order_number
             )
+        return "—"
     order_link.short_description = 'Parent Order'
     
     def order_item_link(self, obj):
@@ -555,6 +582,7 @@ class CakeDesignReferenceAdmin(ModelAdmin):
                 '<a href="{}">Order Item #{}</a>',
                 url, obj.order_item.id
             )
+        return "—"
     order_item_link.short_description = 'Order Item'
     
     def product_info_display(self, obj):
@@ -574,11 +602,66 @@ class CakeDesignReferenceAdmin(ModelAdmin):
                     details.append(f"<strong>Weight:</strong> {obj.order_item.display_weight}")
             
             return mark_safe('<br>'.join(details))
+        return "—"
     product_info_display.short_description = 'Product Details'
     
     def uploaded_at_display(self, obj):
         return obj.uploaded_at.strftime('%Y-%m-%d %H:%M:%S')
     uploaded_at_display.short_description = 'Uploaded At'
+    
+    def get_urls(self):
+        """Add custom URL for downloading image"""
+        urls = super().get_urls()
+        custom_urls = [
+            path(
+                '<int:design_id>/download/',
+                self.admin_site.admin_view(self.download_image_view),
+                name='download_cake_design',
+            ),
+        ]
+        return custom_urls + urls
+    
+    def download_image_view(self, request, design_id):
+        """Download the cake design reference image"""
+        try:
+            design_ref = CakeDesignReference.objects.get(id=design_id)
+            
+            if not design_ref.image:
+                from django.contrib import messages
+                messages.error(request, 'No image found for this design reference.')
+                return HttpResponse('No image found', status=404)
+            
+            # Get the image file
+            image_file = design_ref.image
+            
+            # Get filename
+            import os
+            filename = os.path.basename(image_file.name)
+            
+            # If filename is too generic, create a better one
+            if filename.startswith('cake_designs'):
+                # Create descriptive filename
+                order_num = design_ref.order.order_number if design_ref.order else 'UNKNOWN'
+                product_name = design_ref.order_item.product.name if design_ref.order_item else 'Cake'
+                # Clean product name for filename
+                clean_product = product_name.replace(' ', '_').replace('/', '_')
+                ext = os.path.splitext(filename)[1]
+                filename = f"CakeDesign_{order_num}_{clean_product}{ext}"
+            
+            # Open and read the file
+            response = HttpResponse(image_file.read(), content_type='image/jpeg')
+            response['Content-Disposition'] = f'attachment; filename="{filename}"'
+            
+            return response
+            
+        except CakeDesignReference.DoesNotExist:
+            from django.contrib import messages
+            messages.error(request, f'Design reference with ID {design_id} not found.')
+            return HttpResponse('Design reference not found', status=404)
+        except Exception as e:
+            from django.contrib import messages
+            messages.error(request, f'Error downloading image: {str(e)}')
+            return HttpResponse(f'Error downloading image: {str(e)}', status=500)
     
     def get_queryset(self, request):
         return super().get_queryset(request).select_related(

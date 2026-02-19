@@ -381,16 +381,32 @@ def order_create(request):
                                 # Save design reference if image exists
                                 if customization.reference_image:
                                     try:
-                                        CakeDesignReference.objects.create(
+                                        from django.core.files.base import ContentFile
+                                        
+                                        # Read the image file from customization
+                                        image_file = customization.reference_image
+                                        
+                                        # Create CakeDesignReference with the image
+                                        design_ref = CakeDesignReference(
                                             order=order,
                                             order_item=order_item,
-                                            image=customization.reference_image,
                                             title=customization.reference_title or f"Design for {order_item.product.name}",
                                             description=customization.reference_description or f"Custom cake order",
                                         )
-                                        print(f"DEBUG: Design reference saved for order item {order_item.id}")
+                                        
+                                        # Copy the image file
+                                        design_ref.image.save(
+                                            image_file.name,
+                                            ContentFile(image_file.read()),
+                                            save=False
+                                        )
+                                        design_ref.save()
+                                        
+                                        print(f"DEBUG: Design reference saved for order item {order_item.id} with image {image_file.name}")
                                     except Exception as e:
                                         print(f"Error saving design reference: {e}")
+                                        import traceback
+                                        traceback.print_exc()
                                 
                             else:
                                 # Handle regular items

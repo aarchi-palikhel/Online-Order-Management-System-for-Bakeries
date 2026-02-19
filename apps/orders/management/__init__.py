@@ -1,1 +1,1 @@
-# Orders management commands
+# Management package

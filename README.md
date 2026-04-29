@@ -7,6 +7,7 @@ A full-stack web application for an online bakery management and ordering system
 Online Order Management System for Bakeries is a comprehensive platform designed to streamline bakery operations and provide customers with an intuitive interface for browsing, ordering, and managing bakery products online.
 
 ## Demo Video
+
 https://drive.google.com/file/d/1goLLgeXJtxjBu_VjSlFgNo9wc1cQrTZp/view?usp=sharing
 
 ## 🛠️ Tech Stack
